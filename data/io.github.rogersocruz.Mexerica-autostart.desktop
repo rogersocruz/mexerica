@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Mexerica (serviço)
+Comment=Mantém a roda de conversão pronta para abrir sem atraso
+Exec=@BINDIR@/mexerica --gapplication-service
+Icon=io.github.rogersocruz.Mexerica
+NoDisplay=true
+OnlyShowIn=GNOME;
+X-GNOME-Autostart-enabled=true

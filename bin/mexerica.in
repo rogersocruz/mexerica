@@ -1,0 +1,3 @@
+#!/bin/sh
+# Lançador do Mexerica: o pacote Python fica em @PKGDATADIR@
+PYTHONPATH="@PKGDATADIR@${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m mexerica "$@"

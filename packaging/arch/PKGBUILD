@@ -1,0 +1,39 @@
+# Maintainer: Roger Augusto Souza da Cruz <rogersocruz@gmail.com>
+pkgname=mexerica-git
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Converta arquivos segurando Shift enquanto arrasta (GNOME Shell + GTK 4)"
+arch=('any')
+url="https://github.com/rogersocruz/mexerica"
+license=('MIT')
+depends=('python' 'python-gobject' 'gtk4' 'gnome-shell' 'libarchive')
+makedepends=('git')
+optdepends=(
+  'ffmpeg: vídeo e áudio'
+  'imagemagick: imagens'
+  'libheif: HEIC/AVIF no ImageMagick'
+  'librsvg: SVG para imagem'
+  'poppler: PDF para imagem/texto'
+  'qpdf: juntar, dividir e girar PDF'
+  'ghostscript: comprimir PDF'
+  'perl-image-exiftool: ler/remover metadados'
+  'zbar: ler QR code'
+  'pandoc-cli: Markdown, HTML e EPUB'
+  'libreoffice-fresh: DOCX, PPTX, XLSX'
+  'wl-clipboard: clipboard sem a extensão'
+)
+provides=('mexerica')
+conflicts=('mexerica')
+source=("git+${url}.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd mexerica
+  printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  cd mexerica
+  make install DESTDIR="$pkgdir" PREFIX=/usr AUTOSTARTDIR=/etc/xdg/autostart
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

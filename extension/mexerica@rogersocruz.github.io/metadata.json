@@ -1,0 +1,8 @@
+{
+  "uuid": "mexerica@rogersocruz.github.io",
+  "name": "Mexerica",
+  "description": "Segure Shift enquanto arrasta um arquivo para abrir uma roda de conversão (formatos, ferramentas e ações). Requer o serviço mexerica.",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "url": "https://github.com/rogersocruz/mexerica",
+  "version": 1
+}

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Mexerica
+Comment=Converta arquivos segurando Shift enquanto arrasta
+Exec=@BINDIR@/mexerica
+Icon=io.github.rogersocruz.Mexerica
+Terminal=false
+Categories=Utility;GTK;
+Keywords=converter;convert;comprimir;compress;pdf;imagem;video;audio;
+DBusActivatable=true
+StartupNotify=false

@@ -1,0 +1,300 @@
+// Mexerica — extensão do GNOME Shell
+//
+// Por que uma extensão: no Wayland, durante um arraste o compositor (Mutter)
+// segura o ponteiro e nenhum app enxerga o teclado nem sabe que existe um
+// arraste acontecendo. O Shell roda dentro do compositor, então ele pode:
+//   1. saber que um arraste começou/terminou (sinais do MetaDnd);
+//   2. ler os modificadores (Shift/Alt/Ctrl) a qualquer momento;
+//   3. ler a lista de arquivos arrastados (seleção DND do Mutter);
+//   4. colocar a janela da roda acima de todas as outras;
+//   5. escrever no clipboard em nome do serviço.
+// A roda em si é desenhada pelo serviço GTK (mexerica), que recebe o drop.
+
+import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
+import St from 'gi://St';
+
+import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+const APP_ID = 'io.github.rogersocruz.Mexerica';
+const APP_PATH = '/io/github/rogersocruz/Mexerica';
+const OVERLAY_TITLE = 'mexerica-overlay';
+const FLOAT_PREFIX = 'Mexerica — ';
+
+const POLL_MS = 30;               // leitura dos modificadores durante o arraste
+const RELEASE_GRACE_MS = 150;     // soltar Shift por menos que isso não fecha
+const END_HIDE_DELAY_MS = 400;    // dá tempo do serviço processar o drop
+
+const SHELL_IFACE = `
+<node>
+  <interface name="io.github.rogersocruz.Mexerica.Shell">
+    <method name="SetClipboard">
+      <arg type="s" direction="in" name="text"/>
+    </method>
+    <property name="Version" type="s" access="read"/>
+  </interface>
+</node>`;
+
+function modeFor(mods) {
+    if (!(mods & Clutter.ModifierType.SHIFT_MASK))
+        return null;
+    if (mods & Clutter.ModifierType.MOD1_MASK)
+        return 'tools';
+    if (mods & Clutter.ModifierType.CONTROL_MASK)
+        return 'actions';
+    return 'convert';
+}
+
+function isOurs(win) {
+    if (!win)
+        return false;
+    return win.get_gtk_application_id?.() === APP_ID ||
+        win.get_wm_class?.() === APP_ID;
+}
+
+export default class MexericaExtension extends Extension {
+    enable() {
+        this._active = false;
+        this._generation = 0;
+        this._pollId = 0;
+        this._hideId = 0;
+        this._shownMode = null;
+        this._anchor = null;
+        this._uris = [];
+        this._monitor = -1;
+        this._watched = new Map();
+
+        this._dnd = global.backend.get_dnd();
+        this._dndIds = [
+            this._dnd.connect('dnd-enter', () => this._onDragBegin()),
+            this._dnd.connect('dnd-leave', () => this._onDragEnd()),
+        ];
+        this._windowCreatedId = global.display.connect('window-created',
+            (_display, win) => this._onWindowCreated(win));
+
+        this._dbus = Gio.DBusExportedObject.wrapJSObject(SHELL_IFACE, this);
+        this._dbus.export(Gio.DBus.session, APP_PATH);
+    }
+
+    disable() {
+        this._stopPoll();
+        this._clearHideTimer();
+        if (this._shownMode)
+            this._callApp('hide', null);
+        this._dndIds?.forEach(id => this._dnd.disconnect(id));
+        this._dndIds = null;
+        this._dnd = null;
+        if (this._windowCreatedId)
+            global.display.disconnect(this._windowCreatedId);
+        this._windowCreatedId = 0;
+        for (const [win, ids] of this._watched)
+            ids.forEach(id => win.disconnect(id));
+        this._watched = null;
+        this._dbus?.unexport();
+        this._dbus = null;
+    }
+
+    // ---- D-Bus exportado para o serviço -------------------------------
+    SetClipboard(text) {
+        St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+    }
+
+    get Version() {
+        return String(this.metadata.version ?? '0');
+    }
+
+    // ---- arraste -------------------------------------------------------
+    _onDragBegin() {
+        this._clearHideTimer();
+        this._stopPoll();
+        this._generation++;
+        this._active = true;
+        this._shownMode = null;
+        this._anchor = null;
+        this._releasedAt = 0;
+        this._uris = [];
+        if (!this._dragHasFiles())
+            return;
+        this._fetchUris(this._generation);
+        this._pollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, POLL_MS,
+            () => this._tick());
+    }
+
+    _onDragEnd() {
+        this._active = false;
+        this._stopPoll();
+        if (!this._shownMode)
+            return;
+        this._clearHideTimer();
+        this._hideId = GLib.timeout_add(GLib.PRIORITY_DEFAULT,
+            END_HIDE_DELAY_MS, () => {
+                this._hideId = 0;
+                this._hide();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _tick() {
+        if (!this._active) {
+            this._pollId = 0;
+            return GLib.SOURCE_REMOVE;
+        }
+        const [x, y, mods] = global.get_pointer();
+        const mode = modeFor(mods);
+        if (mode) {
+            this._releasedAt = 0;
+            if (!this._anchor)
+                this._anchor = [x, y];
+            if (mode !== this._shownMode)
+                this._show(mode);
+        } else if (this._shownMode) {
+            const now = GLib.get_monotonic_time();
+            if (!this._releasedAt)
+                this._releasedAt = now;
+            else if (now - this._releasedAt > RELEASE_GRACE_MS * 1000)
+                this._hide();
+        }
+        return GLib.SOURCE_CONTINUE;
+    }
+
+    _stopPoll() {
+        if (this._pollId)
+            GLib.source_remove(this._pollId);
+        this._pollId = 0;
+    }
+
+    _clearHideTimer() {
+        if (this._hideId)
+            GLib.source_remove(this._hideId);
+        this._hideId = 0;
+    }
+
+    _dragHasFiles() {
+        try {
+            const mimes = global.display.get_selection()
+                .get_mimetypes(Meta.SelectionType.SELECTION_DND);
+            return mimes.includes('text/uri-list') ||
+                mimes.includes('application/vnd.portal.filetransfer') ||
+                mimes.includes('application/vnd.portal.files');
+        } catch (e) {
+            console.warn(`Mexerica: não li os tipos do arraste: ${e}`);
+            return true;   // na dúvida, o serviço decide
+        }
+    }
+
+    _fetchUris(generation) {
+        const selection = global.display.get_selection();
+        const stream = Gio.MemoryOutputStream.new_resizable();
+        selection.transfer_async(Meta.SelectionType.SELECTION_DND,
+            'text/uri-list', -1, stream, null, (sel, res) => {
+                try {
+                    sel.transfer_finish(res);
+                    stream.close(null);
+                    if (generation !== this._generation)
+                        return;
+                    const bytes = stream.steal_as_bytes();
+                    const text = new TextDecoder().decode(bytes.toArray());
+                    this._uris = text.split(/\r?\n/)
+                        .map(l => l.trim())
+                        .filter(l => l && !l.startsWith('#'));
+                    if (this._shownMode)
+                        this._show(this._shownMode);  // atualiza a roda
+                } catch (e) {
+                    console.warn(`Mexerica: não li os arquivos: ${e}`);
+                }
+            });
+    }
+
+    // ---- conversa com o serviço ---------------------------------------
+    _show(mode) {
+        this._shownMode = mode;
+        const [ax, ay] = this._anchor ?? global.get_pointer();
+        this._monitor = global.display.get_current_monitor();
+        const geo = global.display.get_monitor_geometry(this._monitor);
+        const param = new GLib.Variant('(sasii)', [
+            mode, this._uris, Math.round(ax - geo.x), Math.round(ay - geo.y),
+        ]);
+        this._callApp('show', param);
+        this._raiseOverlay();
+    }
+
+    _hide() {
+        if (!this._shownMode)
+            return;
+        this._shownMode = null;
+        this._anchor = null;
+        this._callApp('hide', null);
+    }
+
+    _callApp(action, param) {
+        const params = param ? [param] : [];
+        Gio.DBus.session.call(APP_ID, APP_PATH,
+            'org.freedesktop.Application', 'ActivateAction',
+            new GLib.Variant('(sava{sv})', [action, params, {}]),
+            null, Gio.DBusCallFlags.NONE, 3000, null,
+            (conn, res) => {
+                try {
+                    conn.call_finish(res);
+                } catch (e) {
+                    console.warn(`Mexerica: serviço não respondeu (${action}): ${e.message}`);
+                }
+            });
+    }
+
+    // ---- janelas do serviço -------------------------------------------
+    _pin(win) {
+        if (!isOurs(win))
+            return false;
+        const title = win.get_title() ?? '';
+        if (!title)
+            return false;
+        if (title === OVERLAY_TITLE) {
+            if (this._monitor >= 0 && win.get_monitor() !== this._monitor)
+                win.move_to_monitor(this._monitor);
+            if (!win.is_above())
+                win.make_above();
+            win.raise();
+        } else {
+            if (title.startsWith(FLOAT_PREFIX) && !win.is_above())
+                win.make_above();
+            Main.activateWindow(win);
+        }
+        return true;
+    }
+
+    _raiseOverlay() {
+        for (const actor of global.get_window_actors()) {
+            const win = actor.get_meta_window();
+            if (isOurs(win) && win.get_title() === OVERLAY_TITLE)
+                this._pin(win);
+        }
+    }
+
+    _onWindowCreated(win) {
+        if (this._pin(win))
+            return;
+        if (win.get_wm_class() && !isOurs(win))
+            return;   // janela de outro app: nada a fazer
+        // app_id e título podem chegar depois do window-created
+        const unwatch = () => {
+            const ids = this._watched?.get(win);
+            if (!ids)
+                return;
+            ids.forEach(id => win.disconnect(id));
+            this._watched.delete(win);
+        };
+        const retry = () => {
+            if (this._pin(win))
+                unwatch();
+        };
+        this._watched.set(win, [
+            win.connect('notify::wm-class', retry),
+            win.connect('notify::title', retry),
+            win.connect('shown', retry),
+            win.connect('unmanaged', unwatch),
+        ]);
+    }
+}
