@@ -12,14 +12,13 @@ argv (list[str]) executado com subprocess, ou um callable Python.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from .. import cache_dir
 from . import formats as F
+from . import office
 from . import tools as T
 
 CONVERT, TOOLS, ACTIONS = "convert", "tools", "actions"
@@ -65,6 +64,8 @@ class Op:
     hint: str = ""                    # descrição curta (tooltip/CLI)
     max_files: int = 0                # 0 = sem limite
     in_wheel: bool = True             # False: só pela CLI (preset antigo)
+    # aceita estas extensões de entrada? (quem converte depende da entrada)
+    accepts: Callable[[frozenset[str]], bool] | None = None
 
     def is_available(self) -> bool:
         if not T.has(*self.needs):
@@ -265,68 +266,26 @@ SUBTITLE_CONVERT = [
 ]
 
 # --------------------------------------------------------------------------
-# CONVERTER — documentos (LibreOffice, pandoc, poppler)
+# CONVERTER — documentos (Microsoft Office, LibreOffice ou pandoc: veja
+# engine/office.py) e PDF (poppler)
 # --------------------------------------------------------------------------
 
 
-def _soffice(ctx: Ctx, src: Path, ext: str, filt: str | None = None,
-             infilter: str | None = None) -> list[Step]:
-    """LibreOffice headless com perfil próprio (não briga com uma janela do
-    LibreOffice aberta) e saída num diretório temporário."""
-    outdir = ctx.work / "lo"
-    profile = (cache_dir() / "lo-profile").as_uri()
-    target = f"{ext}:{filt}" if filt else ext
-    argv = T.cmd("soffice") + [f"-env:UserInstallation={profile}",
-                               "--headless", "--norestore"]
-    if infilter:
-        argv.append(f"--infilter={infilter}")
-    argv += ["--convert-to", target, "--outdir", str(outdir), str(src)]
-
-    def collect(c: Ctx) -> None:
-        produced = outdir / f"{src.stem}.{ext}"
-        if not produced.exists():
-            raise RuntimeError("LibreOffice não gerou a saída "
-                               f"({produced.name})")
-        shutil.move(str(produced), c.out)
-    return [argv, collect]
-
-
-def _doc_to(ext: str) -> Callable[[Ctx], list[Step]]:
-    filters = {"txt": "Text (encoded):UTF8", "csv": "Text - txt - csv (StarCalc):44,34,76"}
-
+def _doc_to(family: str, ext: str) -> Callable[[Ctx], list[Step]]:
     def build(ctx: Ctx) -> list[Step]:
         if ext == "epub":
-            return _pandoc_to(ctx, "epub")
-        return _soffice(ctx, ctx.src, ext, filters.get(ext))
+            return [office.pandoc(ctx.src, ctx.out, "epub")]
+        return office.convert(ctx, family, ctx.src, ext)
     return build
 
 
-def _pandoc_to(ctx: Ctx, ext: str) -> list[Step]:
-    src_ext = F.full_ext(ctx.src)
-    readers = {"md": "markdown", "markdown": "markdown", "txt": "markdown",
-               "html": "html", "htm": "html", "epub": "epub", "docx": "docx",
-               "odt": "odt"}
-    writer = {"txt": "plain", "md": "gfm", "html": "html", "epub": "epub",
-              "docx": "docx", "odt": "odt"}[ext]
-    argv = T.cmd("pandoc") + ["-f", readers.get(src_ext, "markdown"),
-                              "-t", writer, "-o", str(ctx.out), str(ctx.src)]
-    if ext in ("html", "epub"):
-        argv.insert(-1, "--standalone")
-        argv.insert(-1, f"--metadata=title:{F.stem(ctx.src)}")
-    return [argv]
-
-
 def _text_to(ext: str) -> Callable[[Ctx], list[Step]]:
+    """Markdown, HTML e TXT (e EPUB, em _ebook_to): o pandoc lê; o PDF sai
+    pelo Office ou pelo typst."""
     def build(ctx: Ctx) -> list[Step]:
-        src_ext = F.full_ext(ctx.src)
         if ext == "pdf":
-            # pandoc -> docx (sem LaTeX) e LibreOffice -> pdf
-            if src_ext in ("txt",):
-                return _soffice(ctx, ctx.src, "pdf")
-            mid = ctx.work / f"{F.stem(ctx.src)}.docx"
-            first = Ctx(ctx.src, ctx.srcs, ctx.work, mid)
-            return _pandoc_to(first, "docx") + _soffice(ctx, mid, "pdf")
-        return _pandoc_to(ctx, ext)
+            return office.text_to_pdf(ctx)
+        return [office.pandoc(ctx.src, ctx.out, ext)]
     return build
 
 
@@ -344,41 +303,45 @@ def _pdf_to_text(ctx: Ctx) -> list[Step]:
 
 
 def _pdf_to_docx(ctx: Ctx) -> list[Step]:
-    return _soffice(ctx, ctx.src, "docx", "MS Word 2007 XML",
-                    infilter="writer_pdf_import")
+    return office.convert(ctx, office.TEXT, ctx.src, "docx")
 
 
 def _ebook_to(ext: str) -> Callable[[Ctx], list[Step]]:
     def build(ctx: Ctx) -> list[Step]:
         if ext == "pdf":
-            mid = ctx.work / f"{F.stem(ctx.src)}.docx"
-            first = Ctx(ctx.src, ctx.srcs, ctx.work, mid)
-            return _pandoc_to(first, "docx") + _soffice(ctx, mid, "pdf")
-        return _pandoc_to(ctx, ext)
+            return office.text_to_pdf(ctx)
+        return [office.pandoc(ctx.src, ctx.out, ext)]
     return build
 
 
+def _office_ops(kind: str, family: str, exts: tuple[str, ...],
+                tag: str) -> list[Op]:
+    return [Op(f"to-{e}-{tag}", e.upper(), CONVERT, frozenset({kind}),
+               _doc_to(family, e), ext=e, skip_exts=_same(e),
+               available=office.writes(family, e),
+               accepts=office.reads(family, e))
+            for e in exts]
+
+
 DOC_CONVERT = (
-    [Op(f"to-{e}-doc", e.upper(), CONVERT, frozenset({F.DOC_TEXT}),
-        _doc_to(e), ext=e, needs=("soffice",), skip_exts=_same(e))
-     for e in ("pdf", "docx", "odt", "rtf", "txt")]
+    _office_ops(F.DOC_TEXT, office.TEXT, ("pdf", "docx", "odt", "rtf", "txt"),
+                "doc")
     + [Op("to-epub-doc", "EPUB", CONVERT, frozenset({F.DOC_TEXT}),
-          _doc_to("epub"), ext="epub", needs=("pandoc",),
+          _doc_to(office.TEXT, "epub"), ext="epub", needs=("pandoc",),
           hint="Somente DOCX/ODT")]
-    + [Op(f"to-{e}-slides", e.upper(), CONVERT, frozenset({F.DOC_SLIDES}),
-          _doc_to(e), ext=e, needs=("soffice",), skip_exts=_same(e))
-       for e in ("pdf", "pptx", "odp")]
-    + [Op(f"to-{e}-sheet", e.upper(), CONVERT, frozenset({F.DOC_SHEET}),
-          _doc_to(e), ext=e, needs=("soffice",), skip_exts=_same(e))
-       for e in ("pdf", "xlsx", "ods", "csv")]
+    + _office_ops(F.DOC_SLIDES, office.SLIDES, ("pdf", "pptx", "odp"),
+                  "slides")
+    + _office_ops(F.DOC_SHEET, office.SHEET, ("pdf", "xlsx", "ods", "csv"),
+                  "sheet")
     + [Op("to-pdf-text", "PDF", CONVERT, frozenset({F.TEXT}), _text_to("pdf"),
-          ext="pdf", needs=("soffice", "pandoc"))]
+          ext="pdf", available=office.text_pdf_available,
+          accepts=office.text_pdf_reads)]
     + [Op(f"to-{e}-text", e.upper(), CONVERT, frozenset({F.TEXT}),
           _text_to(e), ext=e, needs=("pandoc",), skip_exts=_same(e))
        for e in ("docx", "odt", "html", "epub", "md", "txt")]
     + [Op(f"to-{e}-ebook", e.upper(), CONVERT, frozenset({F.EBOOK}),
-          _ebook_to(e), ext=e, needs=("pandoc",)
-          + (("soffice",) if e == "pdf" else ()))
+          _ebook_to(e), ext=e, needs=("pandoc",),
+          available=office.text_pdf_available if e == "pdf" else None)
        for e in ("pdf", "docx", "txt", "html", "md")]
     + [
         Op("pdf-to-png", "PNG", CONVERT, frozenset({F.PDF}), _pdf_pages("png"),
@@ -390,7 +353,9 @@ DOC_CONVERT = (
         Op("pdf-to-txt", "TXT", CONVERT, frozenset({F.PDF}), _pdf_to_text,
            ext="txt", needs=("pdftotext",)),
         Op("pdf-to-docx", "DOCX", CONVERT, frozenset({F.PDF}), _pdf_to_docx,
-           ext="docx", needs=("soffice",), hint="Experimental"),
+           ext="docx", available=lambda: office.route(office.TEXT, "pdf",
+                                                     "docx") is not None,
+           hint="Experimental"),
     ]
 )
 
@@ -772,6 +737,8 @@ def options_for(paths: list[Path], group: str) -> list[Op]:
         if op.max_files and len(paths) > op.max_files:
             continue
         if exts and exts <= op.skip_exts:
+            continue
+        if op.accepts and not op.accepts(frozenset(exts)):
             continue
         if F.VIDEO in kinds and op.id.endswith("-audio") \
                 and op.id not in _VIDEO_AUDIO_OK:

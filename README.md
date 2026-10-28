@@ -123,7 +123,7 @@ arrasta o arquivo depois) e ZIP de tudo.
 sudo pacman -S --needed python-gobject gtk4
 # conversores (instale os que quiser; a roda se adapta)
 sudo pacman -S --needed ffmpeg imagemagick libheif librsvg poppler qpdf \
-    ghostscript perl-image-exiftool zbar pandoc-cli libreoffice-fresh
+    ghostscript perl-image-exiftool zbar pandoc-cli typst libreoffice-fresh
 
 git clone https://github.com/rogersocruz/mexerica
 cd mexerica
@@ -162,9 +162,26 @@ O que é instalado:
 | Opção         | Programas                                                        | Para quê |
 |---------------|------------------------------------------------------------------|----------|
 | sempre        | MSYS2 (se faltar), Python 3, GTK 4, PyGObject, pycairo e os ícones Adwaita, com as dependências deles | a roda e as janelas |
-| `-Converters` | pelo MSYS2: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar e libarchive | vídeo e áudio, imagens (HEIC/AVIF, SVG), PDF, QR code, ZIP/7Z/RAR |
-| `-Converters` | pelo winget: Pandoc e ExifTool                                   | Markdown/HTML/EPUB e metadados |
-| `-Office`     | pelo winget: LibreOffice (~350 MB)                               | DOCX, ODT, RTF, PPTX e XLSX (e Markdown/EPUB para PDF) |
+| `-Converters` | pelo MSYS2: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar, libarchive e typst | vídeo e áudio, imagens (HEIC/AVIF, SVG), PDF, QR code, ZIP/7Z/RAR, PDF de documentos sem Office |
+| `-Converters` | pelo winget: Pandoc e ExifTool                                   | Markdown/HTML/EPUB, documentos sem Office e metadados |
+| `-Office`     | pelo winget: LibreOffice (~350 MB), **opcional**                 | Pages, Keynote, Numbers e WordPerfect (veja abaixo) |
+
+**Documentos do Office sem o LibreOffice.** Quem converte DOCX, XLSX,
+PPTX, ODT, ODS, ODP, RTF e afins é, nesta ordem:
+
+1. o **Microsoft Office** instalado (Word, Excel e PowerPoint), por
+   automação e sem abrir janela. É a conversão mais fiel para os formatos
+   da Microsoft, e o Word transforma PDF em DOCX editável. A Mexerica nunca
+   fecha nem esconde um Office que você esteja usando;
+2. o **LibreOffice**, se estiver instalado;
+3. sem nenhum dos dois, o **pandoc + typst** (`-Converters`): textos (DOCX,
+   ODT, RTF) viram PDF, ODT, RTF e TXT, e planilhas (XLSX, CSV) e
+   apresentações (PPTX) viram PDF com o conteúdo (texto, tabelas, imagens),
+   sem o layout.
+
+Com o Microsoft Office instalado, nada se perde sem o LibreOffice, a não ser
+os formatos da Apple (Pages, Keynote, Numbers) e o WordPerfect, que só ele
+abre. `mexerica doctor` mostra quem converte cada tipo nesta máquina.
 
 Sem o MSYS2, o instalador baixa o pacote base dele e extrai em
 `C:\msys64` (ou em `%LOCALAPPDATA%\msys64`); se o download falhar, tenta

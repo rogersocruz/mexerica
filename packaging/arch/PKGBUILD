@@ -19,7 +19,8 @@ optdepends=(
   'perl-image-exiftool: ler/remover metadados'
   'zbar: ler QR code'
   'pandoc-cli: Markdown, HTML e EPUB'
-  'libreoffice-fresh: DOCX, PPTX, XLSX'
+  'typst: PDF de documentos pelo pandoc, sem LibreOffice'
+  'libreoffice-fresh: DOCX, PPTX, XLSX com layout fiel'
   'wl-clipboard: clipboard sem a extensão'
 )
 provides=('mexerica')
