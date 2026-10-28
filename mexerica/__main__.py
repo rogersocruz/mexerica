@@ -113,7 +113,8 @@ def cmd_doctor(_args) -> int:
     extra = [f for f in ("heic", "avif", "webp", "jxl", "pdf") if f in fmts]
     print(f"\nImageMagick escreve: {', '.join(extra) or 'nenhum extra'}")
     if WINDOWS:
-        print("Para instalar o que falta: .\\install.ps1 -Converters")
+        print("Para instalar o que falta: .\\install.ps1 -Converters "
+              "(LibreOffice: -Office)")
     return 0
 
 

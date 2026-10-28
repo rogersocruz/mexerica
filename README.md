@@ -139,28 +139,57 @@ Para instalar como pacote do sistema, use o PKGBUILD:
 Para conferir o que foi detectado: `mexerica doctor`. Para desinstalar:
 `./uninstall.sh`.
 
-## Instalação (Windows 11)
+## Instalação (Windows 10 e 11)
 
 A interface usa o mesmo GTK 4 do Linux, que no Windows vem do
-[MSYS2](https://www.msys2.org). O `install.ps1` instala o MSYS2 pelo
-winget se ele não estiver em `C:\msys64`, sem precisar de administrador:
+[MSYS2](https://www.msys2.org). Basta clonar e rodar, sem administrador:
 
 ```powershell
 git clone https://github.com/rogersocruz/mexerica
 cd mexerica
-# GTK 4 + PyGObject; com -Converters, também ffmpeg, ImageMagick, poppler,
-# qpdf, Ghostscript, librsvg, zbar e libarchive (MSYS2) e Pandoc, ExifTool
-# e LibreOffice (winget). A roda se adapta ao que estiver instalado.
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Converters
+.\install.cmd -Converters
 ```
+
+O `install.cmd` só chama o `install.ps1` com `-ExecutionPolicy Bypass`: o
+padrão do Windows (`Restricted`) não deixa rodar um `.ps1` direto. Se o
+PowerShell já aceita scripts, `.\install.ps1 -Converters` dá no mesmo. Não
+rode como administrador: o serviço tem que ficar no mesmo nível do
+Explorer, senão o Windows bloqueia o arraste para a roda (o instalador
+recusa).
+
+O que é instalado:
+
+| Opção         | Programas                                                        | Para quê |
+|---------------|------------------------------------------------------------------|----------|
+| sempre        | MSYS2 (se faltar), Python 3, GTK 4, PyGObject, pycairo e os ícones Adwaita, com as dependências deles | a roda e as janelas |
+| `-Converters` | pelo MSYS2: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar e libarchive | vídeo e áudio, imagens (HEIC/AVIF, SVG), PDF, QR code, ZIP/7Z/RAR |
+| `-Converters` | pelo winget: Pandoc e ExifTool                                   | Markdown/HTML/EPUB e metadados |
+| `-Office`     | pelo winget: LibreOffice (~350 MB)                               | DOCX, ODT, RTF, PPTX e XLSX (e Markdown/EPUB para PDF) |
+
+Sem o MSYS2, o instalador baixa o pacote base dele e extrai em
+`C:\msys64` (ou em `%LOCALAPPDATA%\msys64`); se o download falhar, tenta
+o winget. Um MSYS2 que já exista (em `C:\msys64`, pelo scoop ou em
+`MSYS2_ROOT`) é aproveitado. A roda só mostra as opções dos programas que
+encontrar, então dá para instalar menos e completar depois. Fora do
+instalador fica só o [rembg](https://github.com/danielgatis/rembg) (REMOVE
+BG com IA, opcional).
+
+**Atalhos de teclado.** O instalador desliga os atalhos do Windows que
+trocam o teclado com **Alt+Shift** (idioma) e **Ctrl+Shift** (layout) e
+avisa no fim: são as mesmas teclas das rodas de ferramentas e de ações, e
+com mais de um teclado instalado cada roda aberta trocaria o teclado
+junto. Para trocar de teclado, use **Win+Espaço**. Quem faz isso é o
+`windows-hotkeys.ps1`: com `-Restore` ele devolve os atalhos como eram (o
+desinstalador também devolve), e `install.ps1 -KeepLayoutHotkeys` não mexe
+neles.
 
 O serviço já sobe no fim da instalação e no login (atalho na pasta
 Inicializar). Não precisa sair da sessão. O pacote fica em
 `%LOCALAPPDATA%\Mexerica` e o comando `mexerica` entra no PATH do usuário
-(vale nos terminais abertos depois). Para conferir: `mexerica doctor`. Para
-desinstalar: `.\uninstall.ps1` (o MSYS2 continua instalado).
-
-O MSYS2 em outra pasta: defina `MSYS2_ROOT` antes de rodar o instalador.
+(vale nos terminais abertos depois). Para conferir: `mexerica doctor`.
+Depois de um `git pull`: `.\install.cmd -AppOnly` (só copia o app e
+reinicia o serviço). Para desinstalar: `.\uninstall.cmd` (o MSYS2 e os
+conversores continuam instalados).
 
 ## Como funciona
 
@@ -253,6 +282,10 @@ Environment).
 - **Windows:** Shift durante um arraste no Explorer também força "mover",
   e o Alt pede "criar atalho". Com a roda aberta, o drop vai para ela e o
   original fica onde estava.
+- **Windows:** com mais de um teclado, Alt+Shift e Ctrl+Shift trocam o
+  teclado. O instalador desliga esses dois atalhos (veja *Atalhos de
+  teclado* acima); com `-KeepLayoutHotkeys`, cada Shift+Alt ou Shift+Ctrl
+  na roda troca o teclado também.
 - **Windows:** a roda só abre em arrastes do shell (Explorer, área de
   trabalho, diálogos de arquivo e apps que usam a imagem de arraste do
   Windows, como os navegadores). Um app que arraste arquivos sem essa
