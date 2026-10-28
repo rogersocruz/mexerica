@@ -51,7 +51,7 @@ class FloatWindow(Gtk.Window):
         motion.connect("leave", lambda *_: self._set_hover(0.0))
         self.disc.add_controller(motion)
 
-        icon = _icon_widget(app.desktop.file_icon(paths[0], ICON_PX))
+        icon = icon_widget(app.desktop.file_icon(paths[0], ICON_PX))
         icon.set_can_target(False)          # o arraste é da bolha inteira
         icon.set_halign(Gtk.Align.CENTER)
         icon.set_valign(Gtk.Align.START)
@@ -127,7 +127,7 @@ def _draw_move(_area, cr, w, h) -> None:
     cr.stroke()
 
 
-def _icon_widget(icon) -> Gtk.Image:
+def icon_widget(icon, size: int = ICON_PX) -> Gtk.Image:
     """Gtk.Image do que o backend achou: textura (miniatura, ícone do
     Windows) ou Gio.Icon (tema de ícones do GNOME)."""
     if icon is None:
@@ -136,8 +136,8 @@ def _icon_widget(icon) -> Gtk.Image:
         image = Gtk.Image.new_from_gicon(icon)
     else:
         image = Gtk.Image.new_from_paintable(icon)
-    image.set_pixel_size(ICON_PX)
+    image.set_pixel_size(size)
     return image
 
 
-__all__ = ["FloatWindow", "TITLE_PREFIX"]
+__all__ = ["FloatWindow", "TITLE_PREFIX", "icon_widget"]

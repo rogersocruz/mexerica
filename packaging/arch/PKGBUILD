@@ -21,6 +21,10 @@ optdepends=(
   'pandoc-cli: Markdown, HTML e EPUB'
   'typst: PDF de documentos pelo pandoc, sem LibreOffice'
   'libreoffice-fresh: DOCX, PPTX, XLSX com layout fiel'
+  'python-yaml: JSON, TOML, XML e CSV para YAML e vice-versa'
+  'python-fonttools: fontes TTF, OTF e WOFF'
+  'python-brotli: fontes WOFF2'
+  'calibre: e-books MOBI, AZW3 e FB2'
   'wl-clipboard: clipboard sem a extensão'
 )
 provides=('mexerica')

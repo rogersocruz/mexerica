@@ -7,5 +7,6 @@ gnome-extensions disable "$UUID" 2>/dev/null || true
 make uninstall \
     PREFIX="$HOME/.local" \
     AUTOSTARTDIR="$HOME/.config/autostart" \
-    EXTDIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
+    EXTDIR="$HOME/.local/share/gnome-shell/extensions/$UUID" \
+    NAUTILUSDIR="$HOME/.local/share/nautilus/scripts"
 echo "Removido. Log e cache em ~/.cache/mexerica (apague se quiser)."

@@ -32,7 +32,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import APP_ID, __version__, cache_dir, settings  # noqa: E402
+from . import APP_ID, __version__, cache_dir, history, settings  # noqa: E402
 from . import desktop  # noqa: E402
 from . import theme as TH  # noqa: E402
 from .floating import FloatWindow  # noqa: E402
@@ -87,7 +87,7 @@ def _caption(paths: list[Path]) -> str:
 
 
 def _size_caption(paths: list[Path]) -> str:
-    """Miolo da roda: tamanho total, como no Tangerine ("1.1 MB")."""
+    """Miolo da roda: tamanho total ("1.1 MB")."""
     total = 0
     for p in paths:
         try:
@@ -387,11 +387,14 @@ class TextWindow(Gtk.Window):
 
 class MexericaApp(Gtk.Application):
     def __init__(self):
+        # HANDLES_OPEN: `mexerica open ARQ...` (menu de contexto) entrega os
+        # arquivos ao serviço que já roda, pelo D-Bus do GApplication
         super().__init__(application_id=APP_ID,
-                         flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+                         flags=Gio.ApplicationFlags.HANDLES_OPEN)
         self.overlay: Overlay | None = None
         self.desktop = desktop.backend(self)
         self.settings_window = None
+        self.argv_files: list[str] = []      # sem D-Bus, o Windows repassa
         self._job = 0
         self._keep_windows: list[Gtk.Window] = []
         self._css = Gtk.CssProvider()
@@ -418,7 +421,8 @@ class MexericaApp(Gtk.Application):
         add("open-file", "as", lambda _a, p: self.open_files(p.unpack()))
         add("open-log", None, lambda *_: self.open_files(
             [str(cache_dir() / "mexerica.log")]))
-        add("settings", None, lambda *_: self.show_settings())
+        add("home", None, lambda *_: self.show_home())
+        add("settings", None, lambda *_: self.show_settings("look"))
         add("quit", None, lambda *_: self.quit())
         self.desktop.start()
         # a primeira roda não espera pelas sondagens lentas (magick)
@@ -428,7 +432,14 @@ class MexericaApp(Gtk.Application):
 
     def do_activate(self):
         # Aberto pelo menu de apps (ou de novo, com o serviço rodando).
-        self.show_settings()
+        self.show_home()
+
+    def do_open(self, files, _n_files, _hint):
+        # "Converter com a Mexerica": um arquivo por chamada no Explorer,
+        # todos de uma vez no Nautilus
+        paths = [Path(f.get_path()) for f in files if f.get_path()]
+        log.info("abrindo %d arquivo(s) no Início", len(paths))
+        self.show_home(paths, merge=True)
 
     def do_shutdown(self):
         self.desktop.stop()          # tira o ícone da bandeja
@@ -448,14 +459,22 @@ class MexericaApp(Gtk.Application):
             self.overlay.wheel = None
             self.overlay.area.queue_draw()
 
-    def show_settings(self) -> None:
+    def show_settings(self, page: str | None = None) -> None:
         from .settings_window import SettingsWindow
         if self.settings_window is None:
             self.settings_window = SettingsWindow(self)
             self.settings_window.connect(
                 "close-request",
                 lambda *_: setattr(self, "settings_window", None) or False)
+        if page:
+            self.settings_window.stack.set_visible_child_name(page)
         self.settings_window.present()
+
+    def show_home(self, paths: list[Path] | None = None,
+                  merge: bool = False) -> None:
+        self.show_settings("home")
+        if paths:
+            self.settings_window.home.set_files(paths, merge=merge)
 
     # -- roda ----------------------------------------------------------------
     def show_wheel(self, mode: str, paths: list[Path], x: int = 0,
@@ -536,6 +555,9 @@ class MexericaApp(Gtk.Application):
         if res.errors and not res.outputs:
             self._notify_errors(job_id, op, res.errors)
             return False
+        history.add(op.id, op.label, paths, res.outputs)
+        if self.settings_window is not None:
+            self.settings_window.home.refresh_recent()
         uris = [Gio.File.new_for_path(str(p)).get_uri() for p in res.outputs]
         first = res.outputs[0]
         title = f"Pronto: {first.name}" if len(res.outputs) == 1 \
@@ -652,5 +674,7 @@ def _short(path: Path) -> str:
 
 
 def main(argv=None) -> int:
+    argv = argv if argv is not None else sys.argv
     app = MexericaApp()
-    return app.run(argv if argv is not None else sys.argv)
+    app.argv_files = [a for a in argv[1:] if not a.startswith("-")]
+    return app.run(argv)

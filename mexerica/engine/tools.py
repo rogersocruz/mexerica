@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import glob
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -33,9 +34,20 @@ PROGRAMS: list[tuple[str, str]] = [
     ("bsdtar", "ZIP/7Z/TAR/RAR (libarchive)"),
     ("ffplay", "ouvir o trecho no Cortar…"),
     ("rembg", "remover fundo de fotos com IA (opcional)"),
+    ("ebook-convert", "e-books MOBI, AZW3 e FB2 (calibre, opcional)"),
 ]
 if not WINDOWS:
     PROGRAMS.append(("wl-copy", "clipboard sem a extensão (wl-clipboard)"))
+
+# Módulos Python opcionais (dados e fontes): pacotes do MSYS2 ou da distro
+MODULES: list[tuple[str, str]] = [
+    ("yaml", "YAML (PyYAML)"), ("fontTools", "fontes TTF, OTF e WOFF"),
+    ("brotli", "fontes WOFF2"),
+]
+
+
+def has_module(name: str) -> bool:
+    return importlib.util.find_spec(name) is not None
 
 
 @functools.lru_cache(maxsize=None)
@@ -53,7 +65,7 @@ def _search_path() -> str | None:
         # (o winget instala alguns por usuário, em LOCALAPPDATA\Programs)
         dirs += [os.path.join(base, sub) for sub in (
             "LibreOffice\\program", "Pandoc", "ExifTool", "Programs\\ExifTool",
-            "Xournal++\\bin")]
+            "Xournal++\\bin", "Calibre2")]
         dirs += sorted(glob.glob(os.path.join(base, "gs", "gs*", "bin")),
                        reverse=True)
         dirs += sorted(glob.glob(os.path.join(base, "ImageMagick*")),
@@ -140,50 +152,70 @@ def cmd(name: str) -> list[str]:
 MAGICK_BASIC = frozenset({"jpeg", "png", "gif", "bmp", "tiff", "ico"})
 
 
-@functools.lru_cache(maxsize=None)
 def magick_writable() -> frozenset[str]:
     """Formatos que o ImageMagick instalado consegue ESCREVER (ex.: HEIC
-    depende do libheif, AVIF/JXL de delegates próprios).
+    depende do libheif, AVIF/JXL de delegates próprios)."""
+    return _magick_formats()[1]
 
-    `-list format` carrega todos os módulos do ImageMagick: no Windows leva
-    uns 10 s. O resultado fica em disco e só é refeito quando o magick ou a
-    pasta dele mudam (instalar o libheif, por exemplo)."""
+
+def magick_readable() -> frozenset[str]:
+    """Formatos que ele consegue LER (RAW de câmera, JPEG 2000, EXR...)."""
+    return _magick_formats()[0]
+
+
+@functools.lru_cache(maxsize=None)
+def _magick_formats() -> tuple[frozenset[str], frozenset[str]]:
+    """(lê, escreve), pelo `-list format`. Ele carrega todos os módulos do
+    ImageMagick: no Windows leva uns 10 s. O resultado fica em disco e só é
+    refeito quando o magick ou a pasta dele mudam (instalar o libheif, por
+    exemplo)."""
     base = resolve("magick")
     if base is None:
-        return frozenset()
+        return frozenset(), frozenset()
     try:
         exe = Path(base[0])
         sig = f"{exe}|{exe.stat().st_mtime_ns}|{exe.parent.stat().st_mtime_ns}"
     except OSError:
         sig = None
-    cache = cache_dir() / "magick-formats.txt"
+    cache = cache_dir() / "magick-formats-v2.txt"
     try:
         lines = cache.read_text(encoding="utf-8").splitlines()
         if sig and lines and lines[0] == sig:
-            return frozenset(lines[1:])
+            return _split_modes(line.split(" ", 1) for line in lines[1:])
     except OSError:
         pass
     try:
         out = subprocess.run(base + ["-list", "format"], capture_output=True,
                              text=True, timeout=60).stdout
     except (OSError, subprocess.SubprocessError):
-        return MAGICK_BASIC
-    fmts = set()
+        return MAGICK_BASIC, MAGICK_BASIC
+    found = []
     for line in out.splitlines():
         parts = line.split()
         # Linha típica: "   HEIC* HEIC      rw+   High Efficiency ..."
-        if len(parts) >= 3 and len(parts[2]) >= 2 and parts[2][1] == "w":
-            fmts.add(parts[0].rstrip("*").lower())
-    if not fmts:
-        return MAGICK_BASIC
+        if len(parts) >= 3 and len(parts[2]) == 3 and parts[2][0] in "r-" \
+                and parts[2][1] in "w-":
+            found.append((parts[2][:2], parts[0].rstrip("*").lower()))
+    if not found:
+        return MAGICK_BASIC, MAGICK_BASIC
     if sig:
         try:
             cache.parent.mkdir(parents=True, exist_ok=True)
-            cache.write_text("\n".join([sig, *sorted(fmts)]),
+            cache.write_text("\n".join([sig] + [f"{m} {n}" for m, n in found]),
                              encoding="utf-8")
         except OSError:
             pass
-    return frozenset(fmts)
+    return _split_modes(found)
+
+
+def _split_modes(pairs) -> tuple[frozenset[str], frozenset[str]]:
+    reads, writes = set(), set()
+    for mode, name in pairs:
+        if mode[0] == "r":
+            reads.add(name)
+        if mode[1] == "w":
+            writes.add(name)
+    return frozenset(reads), frozenset(writes)
 
 
 @functools.lru_cache(maxsize=None)
@@ -211,5 +243,5 @@ def has_encoder(name: str) -> bool:
 def warm_up() -> None:
     """Faz as sondagens lentas antes da primeira roda (o serviço chama numa
     thread ao iniciar)."""
-    magick_writable()
+    _magick_formats()
     ffmpeg_encoders()

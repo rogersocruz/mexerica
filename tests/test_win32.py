@@ -106,6 +106,21 @@ def test_tray_icon_click_and_close():
     assert not IsWindow(tray.hwnd)
 
 
+def test_tray_receives_files_from_another_instance(tmp_path):
+    """Sem o D-Bus do GLib, o "Converter com a Mexerica" de outro processo
+    entrega a lista de arquivos à janela da bandeja (WM_COPYDATA)."""
+    icon = Path(win32.__file__).parents[1] / "data" / "icon.ico"
+    got = []
+    tray = win32.Tray(icon, "Mexerica (teste)", lambda: None, [], lambda: None,
+                      on_files=got.append)
+    try:
+        paths = [str(tmp_path / "relatório final.pdf"), str(tmp_path / "b.png")]
+        assert win32.send_files(tray.hwnd, paths)
+        assert got == [[Path(p) for p in paths]]
+    finally:
+        tray.remove()
+
+
 def test_explorer_image_and_name(tmp_path):
     doc = tmp_path / "relatório final.txt"
     doc.write_text("oi", encoding="utf-8")

@@ -1,8 +1,10 @@
-"""Configurações: aparência, itens das rodas, comportamento e sobre.
+"""A janela da Mexerica: Início (home.py), aparência, itens das rodas,
+comportamento e sobre.
 
-Abre pelo menu de apps (no lugar da antiga janela "está rodando"), pelo
-ícone da bandeja (Windows) ou da barra superior (GNOME). Toda mudança vale
-na hora e fica gravada (settings.py): não há botão de salvar.
+Abre pelo menu de apps, pelo ícone da bandeja (Windows) ou da barra
+superior (GNOME) e pelo "Converter com a Mexerica" do menu de contexto.
+Toda mudança vale na hora e fica gravada (settings.py): não há botão de
+salvar.
 """
 from __future__ import annotations
 
@@ -31,7 +33,8 @@ GROUPS = [(CONVERT, "Converter", "Shift"),
           (TOOLS, "Ferramentas", "Shift + Alt"),
           (ACTIONS, "Ações", "Shift + Ctrl")]
 SECTIONS = [(F.IMAGE, "Imagens"), (F.VECTOR, "SVG"), (F.VIDEO, "Vídeo"),
-            (F.AUDIO, "Áudio"), (F.PDF, "PDF"), (F.DOC_TEXT, "Documentos"),
+            (F.AUDIO, "Áudio"), (F.PDF, "PDF"), (F.DATA, "Dados"),
+            (F.FONT, "Fontes"), (F.DOC_TEXT, "Documentos"),
             (F.DOC_SHEET, "Planilhas"), (F.DOC_SLIDES, "Apresentações"),
             (F.TEXT, "Texto e Markdown"), (F.EBOOK, "E-book"),
             (F.SUBTITLE, "Legendas"), (F.XOPP, "Xournal++")]
@@ -60,7 +63,8 @@ def section_of(op: Op) -> str:
 
 class SettingsWindow(Gtk.Window):
     def __init__(self, app):
-        super().__init__(application=app, title="Configurações da Mexerica",
+        from .home import HomePage          # home.py usa as peças daqui
+        super().__init__(application=app, title="Mexerica",
                          default_width=900, default_height=660)
         self.app = app
         self.add_css_class("mx-settings")
@@ -68,9 +72,11 @@ class SettingsWindow(Gtk.Window):
         self._chips: list[tuple[Gtk.ToggleButton, Op]] = []
         self.set_titlebar(Gtk.HeaderBar())
 
+        self.home = HomePage(app)
         self.stack = stack = Gtk.Stack(
             hexpand=True, transition_type=Gtk.StackTransitionType.CROSSFADE)
         for name, title, page in (
+                ("home", "Início", self.home),
                 ("look", "Aparência", self._look()),
                 ("items", "Itens da roda", self._items()),
                 ("behavior", "Comportamento", self._behavior()),
@@ -155,7 +161,8 @@ class SettingsWindow(Gtk.Window):
             "Escolha o que aparece em cada roda. Um item só aparece quando "
             "serve para o arquivo arrastado e o programa dele está "
             "instalado (os apagados estão sem o programa). Passe o mouse "
-            "para ver o que cada um faz.")
+            "para ver o que cada um faz. Na página Início aparecem todos, "
+            "inclusive os que estão fora da roda.")
         tabs = Gtk.Stack()
         page.append(Gtk.StackSwitcher(stack=tabs, halign=Gtk.Align.START))
         for group, title, keys in GROUPS:
@@ -309,8 +316,9 @@ class SettingsWindow(Gtk.Window):
 
         page.append(_section("Programas"))
         rows = []
-        for name, what in T.PROGRAMS:
-            ok = T.has(name)
+        checks = [(n, w, T.has(n)) for n, w in T.PROGRAMS]
+        checks += [(n, f"{w} (Python)", T.has_module(n)) for n, w in T.MODULES]
+        for name, what, ok in checks:
             mark = Gtk.Label(label="✓" if ok else "—", xalign=0.5,
                              css_classes=["mx-ok" if ok else "mx-missing-mark"])
             rows.append((mark, Gtk.Label(label=name, xalign=0),

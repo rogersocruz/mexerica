@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Callable
 
 from .. import settings
+from . import data as D
+from . import fonts as FT
 from . import formats as F
 from . import office
 from . import tools as T
@@ -115,6 +117,10 @@ _SAME = {
     "aiff": _ext_set("aif", "aiff"),
     "ogg": _ext_set("ogg", "oga"),
     "tar.gz": _ext_set("tar.gz", "tgz"),
+    "yaml": _ext_set("yaml", "yml"),
+    "jp2": _ext_set("jp2", "j2k"),
+    "mobi": _ext_set("mobi", "prc"),
+    "azw3": _ext_set("azw3", "azw"),
 }
 
 
@@ -165,14 +171,32 @@ def _magick_can(fmt: str) -> Callable[[], bool]:
     return lambda: fmt in T.magick_writable()
 
 
+# nome do formato no ImageMagick, quando não é a extensão
+_MAGICK_NAME = {"jpg": "jpeg", "jpe": "jpeg", "jfif": "jpeg", "tif": "tiff",
+                "heif": "heic", "svgz": "svg"}
+# o que todo ImageMagick lê (sem perguntar a ele)
+_MAGICK_ALWAYS = frozenset({"jpeg", "png", "gif", "bmp", "tiff", "webp",
+                            "ico", "svg"})
+
+
+def _magick_reads(exts: frozenset[str]) -> bool:
+    """O ImageMagick instalado abre essas imagens? RAW de câmera, JPEG 2000,
+    EXR, HEIC... dependem dos delegates dele."""
+    names = {_MAGICK_NAME.get(e, e) for e in exts} - _MAGICK_ALWAYS
+    return not names or names <= T.magick_readable()
+
+
 _IMG_TARGETS = ["jpg", "png", "webp", "heic", "avif", "tiff", "bmp", "gif",
                 "ico", "pdf"]
+# fora da roda por padrão (Configurações > Itens da roda e a janela Início)
+_IMG_EXTRA = ["jxl", "jp2", "tga", "qoi"]
 
 IMAGE_CONVERT = [
     Op(f"to-{e}", e.upper(), CONVERT, frozenset(F.IMAGES), _img_to(e), ext=e,
        needs=("magick",), skip_exts=_same(e),
-       available=_magick_can("jpeg" if e == "jpg" else e))
-    for e in _IMG_TARGETS
+       available=_magick_can("jpeg" if e == "jpg" else e),
+       in_wheel=e not in _IMG_EXTRA)
+    for e in _IMG_TARGETS + _IMG_EXTRA
 ]
 
 # --------------------------------------------------------------------------
@@ -190,6 +214,19 @@ def _video_to(ext: str) -> Callable[[Ctx], list[Step]]:
         if ext in ("mp4", "mov"):
             return [_ff(*i, *_X264, "-c:a", "aac", "-b:a", "160k",
                         "-movflags", "+faststart", o)]
+        if ext == "hevc":
+            # hvc1: a tag que o QuickTime e o iPhone esperam
+            return [_ff(*i, "-c:v", "libx265", "-preset", "medium",
+                        "-crf", "26", "-pix_fmt", "yuv420p", "-tag:v", "hvc1",
+                        "-c:a", "aac", "-b:a", "160k",
+                        "-movflags", "+faststart", o)]
+        if ext == "av1":
+            video = (["-c:v", "libsvtav1", "-preset", "8", "-crf", "34"]
+                     if T.has_encoder("libsvtav1") else
+                     ["-c:v", "libaom-av1", "-cpu-used", "6", "-row-mt", "1",
+                      "-crf", "32", "-b:v", "0"])
+            return [_ff(*i, *video, "-pix_fmt", "yuv420p", "-c:a", "aac",
+                        "-b:a", "160k", "-movflags", "+faststart", o)]
         if ext == "mkv":
             # remux: rápido e sem perda; MKV aceita praticamente tudo
             return [_ff(*i, "-map", "0", "-c", "copy", o)]
@@ -252,6 +289,16 @@ VIDEO_CONVERT = [
        ext="avi", needs=("ffmpeg",), skip_exts=_same("avi")),
     Op("to-gif-video", "GIF", CONVERT, frozenset({F.VIDEO}), _video_to("gif"),
        ext="gif", needs=("ffmpeg",)),
+    # fora da roda por padrão: codecs modernos, menores e mais lentos
+    Op("to-mp4-hevc", "MP4 HEVC", CONVERT, frozenset({F.VIDEO}),
+       _video_to("hevc"), ext="mp4", suffix=" HEVC", needs=("ffmpeg",),
+       available=_enc("libx265"), in_wheel=False,
+       hint="H.265: metade do tamanho do H.264"),
+    Op("to-mp4-av1", "MP4 AV1", CONVERT, frozenset({F.VIDEO}),
+       _video_to("av1"), ext="mp4", suffix=" AV1", needs=("ffmpeg",),
+       available=lambda: T.has_encoder("libsvtav1")
+       or T.has_encoder("libaom-av1"), in_wheel=False,
+       hint="AV1: o menor, e o mais lento de gerar"),
 ] + [
     Op(f"to-{e}-audio", e.upper(), CONVERT, frozenset(F.MEDIA), _audio_to(e),
        ext=e, needs=("ffmpeg",), skip_exts=_same(e))
@@ -315,6 +362,19 @@ def _ebook_to(ext: str) -> Callable[[Ctx], list[Step]]:
     return build
 
 
+_PANDOC_EBOOK = ("pdf", "docx", "txt", "html", "md")
+
+
+def _calibre_accepts(ext: str) -> Callable[[frozenset[str]], bool]:
+    """O calibre lê MOBI, AZW3, FB2...; do EPUB, o pandoc já tira PDF,
+    DOCX e TXT, então o calibre só entra com o que o pandoc não faz."""
+    def ok(exts: frozenset[str]) -> bool:
+        if exts <= {"epub"} and ext in _PANDOC_EBOOK:
+            return not T.has("pandoc")
+        return True
+    return ok
+
+
 def _office_ops(kind: str, family: str, exts: tuple[str, ...],
                 tag: str) -> list[Op]:
     return [Op(f"to-{e}-{tag}", e.upper(), CONVERT, frozenset({kind}),
@@ -342,8 +402,9 @@ DOC_CONVERT = (
        for e in ("docx", "odt", "html", "epub", "md", "txt")]
     + [Op(f"to-{e}-ebook", e.upper(), CONVERT, frozenset({F.EBOOK}),
           _ebook_to(e), ext=e, needs=("pandoc",),
-          available=office.text_pdf_available if e == "pdf" else None)
-       for e in ("pdf", "docx", "txt", "html", "md")]
+          available=office.text_pdf_available if e == "pdf" else None,
+          accepts=lambda exts: exts <= {"epub"})       # o resto é do calibre
+       for e in _PANDOC_EBOOK]
     + [
         Op("pdf-to-png", "PNG", CONVERT, frozenset({F.PDF}), _pdf_pages("png"),
            result=DIR, suffix=" Pages", needs=("pdftoppm",),
@@ -417,6 +478,68 @@ XOPP_CONVERT = [
        ext="pdf", needs=("qpdf",), hint="Exporta o caderno"),
     Op("pdf-to-xopp", "XOPP", CONVERT, frozenset({F.PDF}), _pdf_to_xopp,
        ext="xopp", needs=("pdfinfo",), hint="Abre o PDF para anotar"),
+]
+
+# --------------------------------------------------------------------------
+# CONVERTER — e-books pelo calibre (opcional)
+# --------------------------------------------------------------------------
+
+EBOOK_CONVERT = [
+    Op(f"to-{e}-calibre", e.upper(), CONVERT, frozenset({F.EBOOK}),
+       (lambda c: [T.cmd("ebook-convert") + [str(c.src), str(c.out)]]),
+       ext=e, needs=("ebook-convert",), skip_exts=_same(e),
+       accepts=_calibre_accepts(e),
+       hint="Kindle" if e in ("azw3", "mobi") else "")
+    for e in ("epub", "azw3", "mobi", "pdf", "docx", "txt")
+]
+
+# --------------------------------------------------------------------------
+# CONVERTER — dados (JSON, YAML, TOML, XML, CSV) e fontes
+# --------------------------------------------------------------------------
+
+
+def _data_to(fmt: str) -> Callable[[Ctx], list[Step]]:
+    return lambda ctx: [lambda c: D.convert(c.src, c.out, fmt)]
+
+
+def _data_reads(exts: frozenset[str]) -> bool:
+    return all(D.reads(e) for e in exts)
+
+
+# CSV é planilha (o Office converte) e também dado (vira JSON, YAML...)
+DATA_CONVERT = [
+    Op(f"to-{e}-data", e.upper(), CONVERT, frozenset({F.DATA, F.DOC_SHEET}),
+       _data_to(e), ext=e, skip_exts=_same(e),
+       available=(lambda e=e: D.writes(e)), accepts=_data_reads,
+       hint="Precisa ser uma lista de registros" if e == "csv" else "")
+    for e in D.WRITES
+]
+
+
+def _font_to(fmt: str) -> Callable[[Ctx], list[Step]]:
+    return lambda ctx: [lambda c: FT.convert(c.src, c.out, fmt)]
+
+
+def _font_reads(exts: frozenset[str]) -> bool:
+    return "woff2" not in exts or FT.woff2_ok()      # WOFF2 pede o brotli
+
+
+FONT_CONVERT = [
+    Op("to-ttf-font", "TTF", CONVERT, frozenset({F.FONT}), _font_to("ttf"),
+       ext="ttf", skip_exts=_same("ttf"), available=FT.available,
+       accepts=_font_reads, hint="OTF vira curvas quadráticas"),
+    # OTF só sai de uma embalagem (WOFF/WOFF2) com contornos CFF dentro
+    Op("to-otf-font", "OTF", CONVERT, frozenset({F.FONT}), _font_to("otf"),
+       ext="otf", available=FT.available,
+       accepts=lambda exts: exts <= {"woff", "woff2"} and _font_reads(exts),
+       hint="Só de WOFF/WOFF2 com contornos CFF"),
+    Op("to-woff-font", "WOFF", CONVERT, frozenset({F.FONT}), _font_to("woff"),
+       ext="woff", skip_exts=_same("woff"), available=FT.available,
+       accepts=_font_reads),
+    Op("to-woff2-font", "WOFF2", CONVERT, frozenset({F.FONT}),
+       _font_to("woff2"), ext="woff2", skip_exts=_same("woff2"),
+       available=FT.woff2_ok, accepts=_font_reads,
+       hint="O menor, para sites"),
 ]
 
 # --------------------------------------------------------------------------
@@ -639,6 +762,13 @@ TOOL_OPS = [
        lambda c: [_ff("-i", str(c.src), "-vf", "transpose=1", *_X264,
                       "-c:a", "copy", str(c.out))],
        ext="mp4", suffix=" Rotated", needs=("ffmpeg",)),
+    Op("vid-720p", "720p", TOOLS, frozenset({F.VIDEO}),
+       lambda c: [_ff("-i", str(c.src), "-vf",
+                      "scale=-2:'min(720,ih)':flags=lanczos", *_X264,
+                      "-c:a", "aac", "-b:a", "160k",
+                      "-movflags", "+faststart", str(c.out))],
+       ext="mp4", suffix=" 720p", needs=("ffmpeg",), in_wheel=False,
+       hint="No máximo 720 linhas, H.264"),
     Op("vid-snap", "Snapshot", TOOLS, frozenset({F.VIDEO}), _video_snapshot,
        ext="jpg", suffix=" Snapshot", needs=("ffmpeg", "ffprobe"),
        hint="Quadro do meio do vídeo"),
@@ -718,7 +848,8 @@ ACTION_OPS = [
 ]
 
 ALL_OPS: list[Op] = (IMAGE_CONVERT + VIDEO_CONVERT + SUBTITLE_CONVERT
-                     + DOC_CONVERT + ARCHIVE_CONVERT + XOPP_CONVERT
+                     + DOC_CONVERT + EBOOK_CONVERT + ARCHIVE_CONVERT
+                     + XOPP_CONVERT + DATA_CONVERT + FONT_CONVERT
                      + TOOL_OPS + ACTION_OPS)
 BY_ID = {op.id: op for op in ALL_OPS}
 assert len(BY_ID) == len(ALL_OPS), "ids de operação duplicados"
@@ -752,6 +883,9 @@ def options_for(paths: list[Path], group: str,
         if exts and exts <= op.skip_exts:
             continue
         if op.accepts and not op.accepts(frozenset(exts)):
+            continue
+        if F.IMAGE in kinds and "magick" in op.needs \
+                and not _magick_reads(frozenset(exts)):
             continue
         if F.VIDEO in kinds and op.id.endswith("-audio") \
                 and op.id not in _VIDEO_AUDIO_OK:

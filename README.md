@@ -1,7 +1,7 @@
 # Mexerica 🍊
 
-Conversor de arquivos para o GNOME e o Windows 11, inspirado no Tangerine
-(macOS). Você **segura Shift enquanto arrasta um arquivo**: uma roda de
+Conversor de arquivos para o GNOME e o Windows 11. Você **segura Shift
+enquanto arrasta um arquivo**: uma roda de
 formatos aparece em volta do ponteiro. Ao soltar o arquivo num formato, a
 cópia convertida é salva ao lado do original. Tudo roda localmente e nada é
 enviado para a internet.
@@ -382,5 +382,4 @@ A lista detalhada está em [TODO.md](TODO.md).
 
 ## Licença
 
-MIT. Não tem relação com o Tangerine nem com a Leap Studio. É apenas
-inspirado na ideia de interação.
+MIT.

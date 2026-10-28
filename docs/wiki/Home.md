@@ -43,5 +43,4 @@ do original. Tudo roda no seu computador: nada vai para a internet.
   - [Desenvolvimento](Desenvolvimento.md): testes, estrutura do código e como
     acrescentar uma operação
 
-Inspirado no Tangerine (macOS), sem relação com ele nem com a Leap Studio.
 Licença MIT.

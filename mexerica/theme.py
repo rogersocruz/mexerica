@@ -1,4 +1,4 @@
-"""Tema visual: vidro fosco claro e quente (referência: Tangerine).
+"""Tema visual: vidro fosco claro e quente.
 
 Toda cor, medida e duração da interface mora aqui. Cores são tuplas RGB(A)
 de 0 a 1 para o cairo; a versão em hex fica no comentário e no CSS.
@@ -138,6 +138,7 @@ LABELS = {
     "aud-trim": "TRIM", "aud-normalize": "NORMALIZE",
     "aud-compress": "COMPRESS", "aud-mono": "MONO", "aud-silence": "SILENCE",
     "aud-join": "JOIN",
+    "vid-720p": "720p",
     "pdf-pages": "PAGES", "pdf-compress": "COMPRESS", "pdf-split": "SPLIT",
     "pdf-rotate": "ROTATE", "pdf-images": "IMAGES", "pdf-merge": "MERGE",
     "strip-meta": "STRIP META", "show-meta": "METADATA",
@@ -156,7 +157,7 @@ ICONS = {
     "img-qr": "qr", "img-pdf": "doc", "img-collage": "grid",
     "vid-trim": "scissors", "vid-size": "resize", "vid-compress": "compress",
     "vid-mute": "mute", "vid-2x": "speed", "vid-rotate": "rotate",
-    "vid-snap": "camera", "vid-join": "merge",
+    "vid-snap": "camera", "vid-join": "merge", "vid-720p": "resize",
     "aud-trim": "scissors", "aud-normalize": "wave", "aud-compress": "compress",
     "aud-mono": "wave", "aud-silence": "wave", "aud-join": "merge",
     "pdf-pages": "pages", "pdf-compress": "compress", "pdf-split": "split",
@@ -349,6 +350,20 @@ button.mx-float-close:hover { opacity: 0.88; }
   border-radius: 14px;
   background: linear-gradient(135deg, #d6dde6, #8e9fb3 60%%, #5f6f84);
 }
+.mx-settings .mx-drop {
+  border: 2px dashed alpha(%(orange)s, 0.45); border-radius: 16px;
+  padding: 22px; background: alpha(%(orange)s, 0.05);
+}
+.mx-settings .mx-drop.mx-over {
+  border-color: %(orange)s; background: alpha(%(orange)s, 0.14);
+}
+.mx-settings .mx-drop-title { font-size: 15px; font-weight: 700; }
+.mx-settings button.mx-op { border-radius: 999px; padding: 4px 14px;
+  font-weight: 600; }
+.mx-settings button.mx-op:hover { background: alpha(%(orange)s, 0.18); }
+.mx-settings .mx-recent { padding: 8px 10px; border-radius: 12px;
+  background: alpha(%(orange)s, 0.06); }
+.mx-settings .mx-recent.mx-gone { opacity: 0.55; }
 .mx-settings .mx-ok { color: #1b8a3a; font-weight: 700; }
 .mx-settings .mx-key { color: %(orange)s; font-weight: 700; }
 .mx-settings .mx-missing-mark { color: #b3261e; font-weight: 700; }

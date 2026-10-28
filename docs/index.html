@@ -446,6 +446,16 @@ figcaption b { color: var(--ink); font-weight: 650; }
 .os ul { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 15px; display: grid; gap: 8px; }
 .os ul b { color: var(--ink); font-weight: 650; }
 .os .more-link { margin-top: auto; font-weight: 600; }
+.coffee { margin-top: 20px; display: grid; grid-template-columns: auto 1fr auto; gap: 18px 24px; align-items: center;
+  padding: clamp(22px, 3vw, 28px) clamp(22px, 3vw, 32px); border-radius: 24px; background: var(--surface); border: 1px solid var(--line); }
+.coffee > svg { width: 30px; height: 30px; padding: 14px; box-sizing: content-box; border-radius: 16px;
+  background: color-mix(in srgb, #FFDD00 30%, var(--surface)); color: var(--ink); }
+.coffee h3 { font-size: 1.35rem; }
+.coffee p { color: var(--ink-2); font-size: 15px; margin-top: 6px; max-width: 62ch; }
+.btn-coffee { background: #FFDD00; color: #1A1206; }
+.btn-coffee:hover { background: #F2CF00; }
+@media (max-width: 760px) { .coffee { grid-template-columns: auto 1fr; } .coffee .btn { grid-column: 1 / -1; } }
+@media (max-width: 420px) { .coffee { grid-template-columns: 1fr; } }
 code { font: .9em var(--mono); background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; padding: .08em .35em; white-space: nowrap; }
 .code code { font: inherit; background: none; border: 0; padding: 0; white-space: pre; }
 
@@ -829,6 +839,17 @@ cd mexerica
         <a class="more-link" href="https://github.com/rogersocruz/mexerica/blob/main/docs/wiki/Instalacao-Linux.md">Guia completo do Linux →</a>
       </article>
     </div>
+    <aside class="coffee" aria-labelledby="cafe-t">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v2M10 2v2M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/></svg>
+      <div>
+        <h3 id="cafe-t">Gostou? Me pague um café</h3>
+        <p>A Mexerica é gratuita e de código aberto. Se ela te poupa tempo, um café ajuda a manter o projeto andando.</p>
+      </div>
+      <a class="btn btn-coffee" href="https://buymeacoffee.com/rogersocruz" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/></svg>
+        Buy me a coffee
+      </a>
+    </aside>
   </div>
 </section>
 
@@ -849,7 +870,7 @@ cd mexerica
 
 <footer>
   <div class="wrap">
-    <span>Mexerica, por <a href="https://github.com/rogersocruz">Roger Cruz</a>. Licença MIT. Inspirada no Tangerine, do macOS.</span>
+    <span>Mexerica, por <a href="https://github.com/rogersocruz">Roger Cruz</a>. Licença MIT.</span>
     <nav aria-label="Links do projeto">
       <a href="https://github.com/rogersocruz/mexerica">GitHub</a>
       <a href="https://github.com/rogersocruz/mexerica/blob/main/docs/wiki/Home.md">Wiki</a>

@@ -354,7 +354,7 @@ def test_pdf_pages(pdf):
 
 
 def test_suffixes_chain(png):
-    """Sufixos em inglês, com espaço, encadeando como no Tangerine."""
+    """Sufixos em inglês, com espaço, encadeando."""
     crop = run(BY_ID["img-compress"], [png])
     first = _one(crop)
     assert first.name == "foto Compressed.png"

@@ -17,10 +17,12 @@ DOC_TEXT = "doc-text"      # docx, odt, rtf, pages...
 DOC_SLIDES = "doc-slides"  # pptx, odp, key...
 DOC_SHEET = "doc-sheet"    # xlsx, ods, csv...
 TEXT = "text"              # txt, md, html
-EBOOK = "ebook"            # epub
+EBOOK = "ebook"            # epub, mobi, azw3, fb2
 SUBTITLE = "subtitle"      # srt, vtt, ass
 ARCHIVE = "archive"        # zip, tar.*, 7z, rar
 XOPP = "xopp"              # caderno do Xournal++
+DATA = "data"              # json, yaml, toml, xml
+FONT = "font"              # ttf, otf, woff, woff2
 FOLDER = "folder"
 OTHER = "other"
 
@@ -29,11 +31,16 @@ IMAGES = {IMAGE, VECTOR}
 DOCUMENTS = {DOC_TEXT, DOC_SLIDES, DOC_SHEET}
 MEDIA = {VIDEO, AUDIO}
 FILES = {IMAGE, VECTOR, VIDEO, AUDIO, PDF, DOC_TEXT, DOC_SLIDES, DOC_SHEET,
-         TEXT, EBOOK, SUBTITLE, ARCHIVE, XOPP, OTHER}
+         TEXT, EBOOK, SUBTITLE, ARCHIVE, XOPP, DATA, FONT, OTHER}
 ANY = FILES | {FOLDER}
 
+# Imagens que só abrem se o ImageMagick instalado tiver o delegate (RAW de
+# câmera, JPEG 2000, EXR...): a roda confere antes (ops._magick_reads).
+CAMERA_RAW = "dng cr2 cr3 nef nrw arw srf sr2 raf orf rw2 pef srw x3f"
 _EXT = {
-    IMAGE: "jpg jpeg jpe jfif png webp heic heif avif tif tiff bmp gif ico jxl",
+    IMAGE: "jpg jpeg jpe jfif png webp heic heif avif tif tiff bmp gif ico jxl "
+           "psd tga jp2 j2k qoi dds pcx ppm pgm pbm pnm exr hdr xcf "
+           + CAMERA_RAW,
     VECTOR: "svg svgz",
     VIDEO: "mp4 m4v mov mkv webm avi wmv flv 3gp mpg mpeg ts mts m2ts ogv",
     AUDIO: "mp3 m4a aac wav flac ogg oga opus aif aiff wma alac amr",
@@ -42,10 +49,12 @@ _EXT = {
     DOC_SLIDES: "ppt pptx odp key",
     DOC_SHEET: "xls xlsx ods csv numbers",
     TEXT: "txt md markdown html htm",
-    EBOOK: "epub",
+    EBOOK: "epub mobi azw azw3 fb2 fbz lit prc",
     SUBTITLE: "srt vtt ass ssa",
     ARCHIVE: "zip tar gz tgz bz2 tbz2 xz txz zst 7z rar",
     XOPP: "xopp",
+    DATA: "json jsonl ndjson yaml yml toml xml",
+    FONT: "ttf otf woff woff2",
 }
 EXT_TO_KIND = {e: k for k, exts in _EXT.items() for e in exts.split()}
 

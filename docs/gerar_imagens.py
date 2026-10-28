@@ -21,9 +21,10 @@ sys.path.insert(0, str(ROOT))
 OUT = ROOT / "docs" / "assets"
 WORK = Path(tempfile.mkdtemp(prefix="mexerica-site-"))
 
-from mexerica import settings  # noqa: E402
+from mexerica import history, settings  # noqa: E402
 
 settings.path = lambda: WORK / "settings.json"     # longe das reais
+history.path = lambda: WORK / "history.json"
 
 import cairo  # noqa: E402
 import gi  # noqa: E402
@@ -145,6 +146,26 @@ def og_image(path: Path) -> None:
 # Janelas (GTK, fora da tela)
 # --------------------------------------------------------------------------
 
+def sample_history(photo: Path) -> None:
+    """Três conversões recentes, com arquivos de verdade (a página Início
+    mostra a miniatura de cada um)."""
+    import datetime as dt
+    import json
+    now = dt.datetime.now()
+    png = WORK / "foto.png"
+    subprocess.run(T.cmd("magick") + [str(photo), str(png)], check=True)
+    data = WORK / "pedidos.json"
+    data.write_text(json.dumps([{"id": 1}]), encoding="utf-8")
+    mp3 = WORK / "entrevista.mp3"
+    mp3.write_bytes(b"")
+    for op, label, src, out, ago in (
+            ("to-json-data", "JSON", "pedidos.csv", data, dt.timedelta(days=1)),
+            ("to-mp3-audio", "MP3", "entrevista.mp4", mp3,
+             dt.timedelta(hours=2)),
+            ("to-png", "PNG", photo.name, png, dt.timedelta(minutes=3))):
+        history.add(op, label, [WORK / src], [out], when=now - ago)
+
+
 def gui_shots(photo: Path) -> None:
     from mexerica import desktop
     from mexerica.app import MexericaApp
@@ -211,7 +232,8 @@ def gui_shots(photo: Path) -> None:
         def shoot(self):
             sw = self.wins["settings"]
             sw.stack.set_transition_type(Gtk.StackTransitionType.NONE)
-            for page in ("look", "items"):
+            sw.home.set_files([photo])
+            for page in ("home", "look", "items"):
                 sw.stack.set_visible_child_name(page)
                 self.snap(sw, f"settings-{page}")
             for name in ("float", "crop", "addbg"):
@@ -236,6 +258,7 @@ def main() -> None:
     shutil.copy(ROOT / "data" / "icons" / "io.github.rogersocruz.Mexerica.svg",
                 OUT / "icon.svg")
     shutil.copy(ROOT / "mexerica" / "data" / "icon.png", OUT / "icon.png")
+    sample_history(photo)
     gui_shots(photo)
     shutil.rmtree(WORK, ignore_errors=True)
     print("imagens em", OUT)
