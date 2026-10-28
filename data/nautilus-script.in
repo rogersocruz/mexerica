@@ -1,0 +1,4 @@
+#!/bin/sh
+# Nautilus: botão direito > Scripts > Converter com a Mexerica. Abre a
+# janela Início com os arquivos selecionados.
+exec "@BINDIR@/mexerica" open "$@"

@@ -209,6 +209,9 @@ TrackPopupMenu = _fn(user32, "TrackPopupMenu", ctypes.c_int, W.HMENU, W.UINT,
 DestroyMenu = _fn(user32, "DestroyMenu", W.BOOL, W.HMENU)
 PostMessageW = _fn(user32, "PostMessageW", W.BOOL, W.HWND, W.UINT, W.WPARAM,
                    W.LPARAM)
+SendMessageTimeoutW = _fn(user32, "SendMessageTimeoutW", W.LPARAM, W.HWND,
+                          W.UINT, W.WPARAM, W.LPARAM, W.UINT, W.UINT,
+                          ctypes.POINTER(ctypes.c_size_t))
 SHGetKnownFolderPath = _fn(shell32, "SHGetKnownFolderPath", ctypes.c_long,
                            ctypes.POINTER(GUID), W.DWORD, W.HANDLE,
                            ctypes.POINTER(ctypes.c_wchar_p))
@@ -620,27 +623,61 @@ def display_name(path: Path) -> str:
     return Path(path).name
 
 
+class COPYDATASTRUCT(ctypes.Structure):
+    _fields_ = [("dwData", ctypes.c_size_t), ("cbData", W.DWORD),
+                ("lpData", ctypes.c_void_p)]
+
+
+WM_COPYDATA = 0x004A
+SMTO_ABORTIFHUNG = 0x0002
+COPY_FILES = 0x4D58         # "MX": identifica a lista de arquivos
+
+
+def send_files(hwnd, paths: list[str]) -> bool:
+    """Manda caminhos para a janela da bandeja de outro processo (o
+    "Converter com a Mexerica" sem o D-Bus do GLib)."""
+    raw = "\n".join(paths).encode("utf-16-le")
+    buf = ctypes.create_string_buffer(raw, len(raw))
+    data = COPYDATASTRUCT(COPY_FILES, len(raw),
+                          ctypes.cast(buf, ctypes.c_void_p))
+    result = ctypes.c_size_t()
+    return bool(SendMessageTimeoutW(hwnd, WM_COPYDATA, 0,
+                                    ctypes.addressof(data), SMTO_ABORTIFHUNG,
+                                    5000, ctypes.byref(result)))
+
+
 class Tray:
     """Ícone na área de notificação, perto do relógio. Clique abre `on_open`;
     o botão direito abre o menu (rótulo, função; None é um separador). Vive
     numa janela invisível da thread principal: o laço do GTK entrega as
     mensagens dela. WM_CLOSE nessa janela (o instalador manda) chama
-    `on_close`."""
+    `on_close`; uma lista de arquivos de outra instância (send_files) chama
+    `on_files`."""
 
     CALLBACK = WM_APP + 1
     OPEN = WM_APP + 2       # outra instância pede para abrir (sem D-Bus)
 
-    def __init__(self, icon: Path, tip: str, on_open, menu, on_close):
+    # A classe da janela é registrada uma vez por processo, com um _proc só
+    # que entrega cada mensagem à Tray daquela janela (por hwnd): com o
+    # _wndproc de uma Tray na classe, uma segunda Tray receberia as
+    # mensagens pela primeira, já removida.
+    _live: dict = {}
+    _proc = None
+
+    def __init__(self, icon: Path, tip: str, on_open, menu, on_close,
+                 on_files=None):
         self._on_open, self._menu, self._on_close = on_open, menu, on_close
-        # antes de criar a janela: a criação já manda mensagens ao _wndproc
+        self._on_files = on_files
         self._recreated = RegisterWindowMessageW("TaskbarCreated")
-        self._proc = WNDPROC(self._wndproc)       # vivo enquanto a janela
         instance = GetModuleHandleW(None)
-        RegisterClassW(ctypes.byref(WNDCLASSW(lpfnWndProc=self._proc,
-                                              hInstance=instance,
-                                              lpszClassName=TRAY_CLASS)))
+        if Tray._proc is None:
+            Tray._proc = WNDPROC(Tray._dispatch)    # vivo enquanto o processo
+            RegisterClassW(ctypes.byref(WNDCLASSW(lpfnWndProc=Tray._proc,
+                                                  hInstance=instance,
+                                                  lpszClassName=TRAY_CLASS)))
         self.hwnd = CreateWindowExW(0, TRAY_CLASS, "Mexerica", 0, 0, 0, 0, 0,
                                     None, None, instance, None)
+        Tray._live[self.hwnd] = self
         self._icon = LoadImageW(None, str(icon), IMAGE_ICON,
                                 GetSystemMetrics(SM_CXSMICON),
                                 GetSystemMetrics(SM_CYSMICON), LR_LOADFROMFILE)
@@ -653,8 +690,17 @@ class Tray:
     def remove(self) -> None:
         Shell_NotifyIconW(NIM_DELETE, ctypes.byref(self._data))
         DestroyWindow(self.hwnd)
+        Tray._live.pop(self.hwnd, None)
         if self._icon:
             DestroyIcon(self._icon)
+
+    @staticmethod
+    def _dispatch(hwnd, msg, wparam, lparam):
+        # (as mensagens da criação chegam antes de a janela ter dono)
+        tray = Tray._live.get(hwnd)
+        if tray is None:
+            return DefWindowProcW(hwnd, msg, wparam, lparam)
+        return tray._wndproc(hwnd, msg, wparam, lparam)
 
     def _wndproc(self, hwnd, msg, wparam, lparam):
         try:
@@ -668,6 +714,14 @@ class Tray:
             if msg == self.OPEN:
                 self._on_open()
                 return 0
+            if msg == WM_COPYDATA and self._on_files:
+                data = ctypes.cast(lparam,
+                                   ctypes.POINTER(COPYDATASTRUCT)).contents
+                if data.dwData != COPY_FILES:
+                    return 0
+                text = ctypes.wstring_at(data.lpData, data.cbData // 2)
+                self._on_files([Path(p) for p in text.split("\n") if p])
+                return 1
             if msg == self._recreated:      # o Explorer reiniciou
                 self.shown = bool(Shell_NotifyIconW(NIM_ADD,
                                                     ctypes.byref(self._data)))

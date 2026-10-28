@@ -1,6 +1,7 @@
 """Linha de comando.
 
   mexerica                     inicia o serviço (roda + notificações)
+  mexerica open ARQ...         abre a janela Início com os arquivos
   mexerica list ARQ...         lista operações disponíveis para os arquivos
   mexerica run ID ARQ...       executa uma operação sem interface
   mexerica doctor              mostra quais programas externos foram achados
@@ -97,6 +98,11 @@ def cmd_doctor(_args) -> int:
         found = T.resolve(name)
         mark = "ok " if found else "-- "
         print(f"{mark}{name:<10} {what}" + ("" if found else "  (ausente)"))
+    for name, what in T.MODULES:
+        found = T.has_module(name)
+        mark = "ok " if found else "-- "
+        print(f"{mark}{name:<10} {what}, módulo Python"
+              + ("" if found else "  (ausente)"))
     fmts = T.magick_writable()
     extra = [f for f in ("heic", "avif", "webp", "jxl", "pdf") if f in fmts]
     print(f"\nImageMagick escreve: {', '.join(extra) or 'nenhum extra'}")
@@ -130,6 +136,13 @@ def main(argv: list[str] | None = None) -> int:
         # Sem argumento (menu Iniciar), abre as Configurações.
         rest = ["--gapplication-service" if a == "daemon" else a for a in argv]
         return app_main([sys.argv[0], *rest])
+    if argv[0] == "open":
+        # "Converter com a Mexerica" (Explorer/Nautilus): o GApplication
+        # entrega os arquivos ao serviço que já roda ou vira o serviço
+        _setup_logging(verbose=False)
+        from .app import main as app_main
+        files = [str(Path(a).resolve()) for a in argv[1:]]
+        return app_main([sys.argv[0], *files])
 
     parser = argparse.ArgumentParser(prog="mexerica")
     parser.add_argument("--version", action="version", version=__version__)

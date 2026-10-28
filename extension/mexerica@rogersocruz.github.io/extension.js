@@ -166,6 +166,7 @@ export default class MexericaExtension extends Extension {
             entry.connect('activate', () => this._callApp(action, null));
             button.menu.addMenuItem(entry);
         };
+        item('Abrir a Mexerica', 'home');
         item('Configurações…', 'settings');
         item('Abrir o log', 'open-log');
         button.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());

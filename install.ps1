@@ -18,8 +18,16 @@
 
 .PARAMETER Converters
   Instala também os conversores: ffmpeg, ImageMagick, libheif, librsvg,
-  poppler, qpdf, Ghostscript, zbar, libarchive e typst pelo MSYS2; Pandoc
-  e ExifTool pelo winget. Sem isso, a roda mostra só o que já existir.
+  poppler, qpdf, Ghostscript, zbar, libarchive, typst, PyYAML, fontTools e
+  brotli pelo MSYS2; Pandoc e ExifTool pelo winget. Sem isso, a roda mostra
+  só o que já existir.
+
+.PARAMETER Calibre
+  Instala o calibre (winget, ~200 MB), para e-books MOBI, AZW3 e FB2. O
+  EPUB não precisa dele.
+
+.PARAMETER NoContextMenu
+  Não acrescenta "Converter com a Mexerica" ao botão direito do Explorer.
 
 .PARAMETER Office
   Instala o LibreOffice (winget, ~350 MB). Em geral não precisa: os
@@ -38,8 +46,8 @@
 .EXAMPLE
   .\install.ps1 -Converters
 #>
-param([switch]$Converters, [switch]$Office, [switch]$AppOnly,
-      [switch]$KeepLayoutHotkeys)
+param([switch]$Converters, [switch]$Office, [switch]$Calibre, [switch]$AppOnly,
+      [switch]$KeepLayoutHotkeys, [switch]$NoContextMenu)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -212,7 +220,8 @@ if (-not $AppOnly) {
     if ($Converters) {
         # um por vez: se algum faltar no repositório, os outros entram
         foreach ($name in 'ffmpeg', 'imagemagick', 'libheif', 'librsvg', 'poppler',
-                          'qpdf', 'ghostscript', 'zbar', 'libarchive', 'typst') {
+                          'qpdf', 'ghostscript', 'zbar', 'libarchive', 'typst',
+                          'python-yaml', 'python-fonttools', 'python-brotli') {
             if (-not (Invoke-Pacman @('-S', '--needed', '--noconfirm', ($Pkg + $name)))) {
                 Write-Warning "pacman: $name não foi instalado"
             }
@@ -221,6 +230,7 @@ if (-not $AppOnly) {
     $wingetIds = @()
     if ($Converters) { $wingetIds += 'JohnMacFarlane.Pandoc', 'OliverBetz.ExifTool' }
     if ($Office) { $wingetIds += 'TheDocumentFoundation.LibreOffice' }
+    if ($Calibre) { $wingetIds += 'calibre.calibre' }
     if ($wingetIds) {
         $winget = Find-Winget
         if ($winget) {
@@ -246,6 +256,7 @@ if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
 Copy-Item -Recurse 'mexerica' $dest
 Get-ChildItem $dest -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
 Copy-Item "data\icons\$AppId.ico" $Ico -Force
+Copy-Item 'bin\mexerica-open.pyw' $App -Force
 
 $launcher = Get-Content -Raw 'bin\mexerica.cmd.in'
 $launcher = $launcher.Replace('@PYTHON@', (ConvertTo-CmdPath $Py)).Replace('@PKGDATADIR@', '%~dp0..\app')
@@ -280,6 +291,27 @@ $parkedLink = Join-Path $Root 'autostart-off.lnk'
 if (Test-Path $parkedLink) { $startupLink = $parkedLink }
 New-Shortcut $startupLink '-X utf8 -m mexerica daemon' 'Mantém a roda de conversão pronta para abrir sem atraso'
 
+# botão direito do Explorer, em arquivos e pastas: abre a janela Início com
+# eles (no Windows 11, em "Mostrar mais opções"). Pelo .NET: o "*" do
+# caminho seria um curinga para os cmdlets do registro.
+function Set-ContextMenu([string]$Class) {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\$Class\shell\Mexerica")
+    $key.SetValue('MUIVerb', 'Converter com a Mexerica')
+    $key.SetValue('Icon', $Ico)
+    $command = $key.CreateSubKey('command')
+    $command.SetValue('', "`"$PyW`" -X utf8 `"$(Join-Path $App 'mexerica-open.pyw')`" `"%1`"")
+    $command.Close()
+    $key.Close()
+}
+if ($NoContextMenu) {
+    foreach ($class in '*', 'Directory') {
+        [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree("Software\Classes\$class\shell\Mexerica", $false)
+    }
+} else {
+    Set-ContextMenu '*'
+    Set-ContextMenu 'Directory'
+}
+
 # Alt+Shift e Ctrl+Shift trocam o teclado: são as teclas das rodas
 if (-not $KeepLayoutHotkeys) {
     & (Join-Path $PSScriptRoot 'windows-hotkeys.ps1')
@@ -294,8 +326,10 @@ $env:PYTHONPATH = $App
 Write-Host @"
 
 Instalado e rodando (ícone da Mexerica perto do relógio). Arraste um arquivo
-no Explorer e segure Shift (Shift+Alt: ferramentas, Shift+Ctrl: ações).
-Configurações: clique no ícone da bandeja ou abra "Mexerica" no menu Iniciar.
+no Explorer e segure Shift (Shift+Alt: ferramentas, Shift+Ctrl: ações), ou
+clique com o botão direito > "Converter com a Mexerica" (no Windows 11, em
+"Mostrar mais opções"). Janela Início e Configurações: clique no ícone da
+bandeja ou abra "Mexerica" no menu Iniciar.
 
 O comando mexerica vale nos terminais abertos a partir de agora.
 Log: $Root\cache\mexerica.log

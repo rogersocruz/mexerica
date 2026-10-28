@@ -35,6 +35,11 @@ Remove-Item -Force -ErrorAction SilentlyContinue `
     (Join-Path $Root 'autostart-off.lnk')
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue `
     (Join-Path $Root 'app'), $Bin, (Join-Path $Root 'mexerica.ico')
+# "Converter com a Mexerica" do botão direito (pelo .NET: o "*" do caminho
+# seria um curinga para os cmdlets do registro)
+foreach ($class in '*', 'Directory') {
+    [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree("Software\Classes\$class\shell\Mexerica", $false)
+}
 
 $userPath = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
 $parts = $userPath -split ';' | Where-Object { $_ -and $_ -ne $Bin }

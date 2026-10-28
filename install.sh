@@ -13,7 +13,8 @@ fi
 make install \
     PREFIX="$HOME/.local" \
     AUTOSTARTDIR="$HOME/.config/autostart" \
-    EXTDIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
+    EXTDIR="$HOME/.local/share/gnome-shell/extensions/$UUID" \
+    NAUTILUSDIR="$HOME/.local/share/nautilus/scripts"
 
 # habilita a extensão (vale no próximo login; no Wayland o Shell não recarrega)
 python3 - "$UUID" <<'PY'
@@ -40,9 +41,11 @@ echo
 cat <<MSG
 
 Instalado. Falta um passo: SAIA E ENTRE DE NOVO NA SESSÃO para o GNOME
-Shell carregar a extensão. Depois: arraste um arquivo e segure Shift.
+Shell carregar a extensão. Depois: arraste um arquivo e segure Shift, ou
+no Nautilus, botão direito > Scripts > Converter com a Mexerica.
 
 Opcionais no Arch (as opções aparecem na roda conforme instalar):
   sudo pacman -S --needed ffmpeg imagemagick libheif librsvg poppler qpdf \\
-      ghostscript perl-image-exiftool zbar pandoc-cli libreoffice-fresh
+      ghostscript perl-image-exiftool zbar pandoc-cli libreoffice-fresh \\
+      python-yaml python-fonttools python-brotli calibre
 MSG

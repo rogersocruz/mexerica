@@ -66,20 +66,22 @@ def magick(tmp_path, monkeypatch):
         return subprocess.CompletedProcess(argv, 0, LIST_FORMAT, "")
     fake_run.fail = False
     monkeypatch.setattr(T.subprocess, "run", fake_run)
-    T.magick_writable.cache_clear()
+    T._magick_formats.cache_clear()
     yield exe, calls, fake_run
-    T.magick_writable.cache_clear()
+    T._magick_formats.cache_clear()
 
 
 def test_magick_formats_cached_on_disk(magick):
     """`-list format` leva ~10 s no Windows: roda uma vez por instalação."""
     exe, calls, _run = magick
     assert T.magick_writable() == {"heic", "jpeg", "pdf"}   # 3FR só lê
-    T.magick_writable.cache_clear()                         # outro processo
+    assert T.magick_readable() == {"3fr", "heic", "jpeg", "pdf"}
+    T._magick_formats.cache_clear()                         # outro processo
     assert T.magick_writable() == {"heic", "jpeg", "pdf"}
+    assert T.magick_readable() == {"3fr", "heic", "jpeg", "pdf"}
     assert len(calls) == 1
     (exe.parent / "libheif-1.dll").touch()                  # pasta mudou
-    T.magick_writable.cache_clear()
+    T._magick_formats.cache_clear()
     T.magick_writable()
     assert len(calls) == 2
 
@@ -89,7 +91,7 @@ def test_magick_listing_failure_keeps_basic_formats(magick):
     run.fail = True
     assert T.magick_writable() == T.MAGICK_BASIC
     run.fail = False
-    T.magick_writable.cache_clear()
+    T._magick_formats.cache_clear()
     assert T.magick_writable() == {"heic", "jpeg", "pdf"}   # falha não ficou
     assert len(calls) == 2
 
@@ -102,3 +104,23 @@ def test_windows_tar_is_bsdtar(system):
     assert T.resolve("bsdtar") is None
     system(False, {"tar": "/usr/bin/tar"})                # GNU tar não serve
     assert T.resolve("bsdtar") is None
+
+
+def test_images_need_a_magick_that_reads_them(monkeypatch):
+    """RAW de câmera, JPEG 2000, EXR... só entram na roda se o ImageMagick
+    instalado tiver o delegate; os comuns nem perguntam."""
+    from mexerica.engine import ops
+    monkeypatch.setattr(T, "magick_readable", lambda: frozenset({"heic", "dng"}))
+    assert ops._magick_reads(frozenset({"jpg", "png", "svg"}))
+    assert ops._magick_reads(frozenset({"heif", "dng"}))
+    assert not ops._magick_reads(frozenset({"cr3"}))
+
+
+def test_calibre_only_where_pandoc_does_not_reach(monkeypatch):
+    from mexerica.engine import ops
+    pdf, azw3 = ops._calibre_accepts("pdf"), ops._calibre_accepts("azw3")
+    monkeypatch.setattr(T, "has", lambda *_n: True)
+    assert not pdf(frozenset({"epub"}))          # EPUB -> PDF é do pandoc
+    assert pdf(frozenset({"mobi"})) and azw3(frozenset({"epub"}))
+    monkeypatch.setattr(T, "has", lambda *_n: False)
+    assert pdf(frozenset({"epub"}))              # sem pandoc, o calibre faz

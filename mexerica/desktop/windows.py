@@ -85,9 +85,12 @@ class WindowsDesktop:
         if not W.claim_instance(APP_ID):
             # o GApplication não achou a outra instância (sem o barramento
             # D-Bus do GLib); duas abririam duas rodas a cada arraste. Pede
-            # à outra que abra as Configurações (o que este abriria) e sai.
+            # à outra que abra o que este abriria (Início, com os arquivos
+            # do menu de contexto) e sai.
             tray = W.FindWindowExW(None, None, W.TRAY_CLASS, None)
-            if tray:
+            files = [str(Path(f).resolve()) for f in self.app.argv_files
+                     if Path(f).exists()]
+            if tray and not (files and W.send_files(tray, files)):
                 W.PostMessageW(tray, W.Tray.OPEN, 0, 0)
             log.warning("outro serviço da Mexerica já está rodando; saindo")
             os._exit(0)
@@ -109,8 +112,12 @@ class WindowsDesktop:
         try:
             self.tray = W.Tray(
                 ICON, "Mexerica: arraste um arquivo e segure Shift",
-                on_open=later(self.app.show_settings),
-                menu=[("Configurações…", later(self.app.show_settings)),
+                on_open=later(self.app.show_home),
+                on_files=lambda paths: GLib.idle_add(
+                    lambda: (self.app.show_home(paths, merge=True), False)[1]),
+                menu=[("Abrir a Mexerica", later(self.app.show_home)),
+                      ("Configurações…",
+                       later(lambda: self.app.show_settings("look"))),
                       ("Abrir o log", later(lambda: self.app.activate_action(
                           "open-log", None))),
                       None,
