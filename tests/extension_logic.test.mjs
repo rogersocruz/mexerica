@@ -20,6 +20,7 @@ let clipboard = null;
 const GLib = {
     PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false, SOURCE_CONTINUE: true,
     get_monotonic_time: () => now,
+    idle_add(_p, fn) { return this.timeout_add(_p, 0, fn); },
     timeout_add(_p, ms, fn) {
         const t = {due: now + ms * 1000, ms, fn, alive: true};
         timers.push(t);
@@ -72,7 +73,7 @@ globalThis.global = {
     backend: {get_dnd: () => dnd},
     display,
     get_pointer: () => pointer,
-    get_window_actors: () => windows.map(w => ({get_meta_window: () => w})),
+    get_window_actors: () => windows.map(w => w.actor),
 };
 
 const Gio = {
@@ -87,7 +88,28 @@ const Gio = {
         steal_as_bytes() { const d = this.data; return {toArray: () => new TextEncoder().encode(d)}; },
     })},
 };
-const Clutter = {ModifierType: {SHIFT_MASK: SHIFT, CONTROL_MASK: CTRL, MOD1_MASK: ALT}};
+// atores do compositor: só o necessário para o vidro
+class FakeActor {
+    constructor() { this.effects = new Map(); this.children = []; this.eased = {}; }
+    add_effect_with_name(name, fx) { this.effects.set(name, fx); }
+    get_effect(name) { return this.effects.get(name) ?? null; }
+    remove_effect_by_name(name) { this.effects.delete(name); }
+    ease_property(prop, value) { this.eased[prop] = value; }
+    insert_child_below(child) { this.children.unshift(child); child.parent = this; }
+    set_position(x, y) { this.pos = [x, y]; }
+    set_size(w, h) { this.size = [w, h]; }
+    destroy() {
+        this.destroyed = true;
+        this.parent.children = this.parent.children.filter(c => c !== this);
+    }
+}
+const Clutter = {
+    ModifierType: {SHIFT_MASK: SHIFT, CONTROL_MASK: CTRL, MOD1_MASK: ALT},
+    AnimationMode: {EASE_OUT_QUAD: 1},
+    Actor: FakeActor,
+};
+const Shell = {BlurMode: {BACKGROUND: 1},
+    BlurEffect: class { constructor(p) { Object.assign(this, p); } }};
 const Meta = {SelectionType: {SELECTION_DND: 2}};
 const St = {Clipboard: {get_default: () => ({set_text: (_t, s) => { clipboard = s; }})},
     ClipboardType: {CLIPBOARD: 1}};
@@ -100,20 +122,28 @@ const body = src
     .replace(/^import .*$/gm, '')
     .replace('export default class', 'return class');
 // eslint-disable-next-line no-new-func
-const Ext = new Function('Clutter', 'Gio', 'GLib', 'Meta', 'St', 'Extension', 'Main', body)(
-    Clutter, Gio, GLib, Meta, St, Extension, Main);
+const Ext = new Function('Clutter', 'Gio', 'GLib', 'Meta', 'Shell', 'St',
+    'Extension', 'Main', body)(
+    Clutter, Gio, GLib, Meta, Shell, St, Extension, Main);
 
 const ext = new Ext();
 ext.enable();
 
 function fakeWindow(title, wmClass = 'io.github.rogersocruz.Mexerica') {
-    return Object.assign(emitter(), {
-        above: false, raised: 0, monitor: 0,
+    const actor = new FakeActor();
+    const win = Object.assign(emitter(), {
+        above: false, raised: 0, monitor: 0, actor,
+        get_compositor_private: () => actor,
+        // buffer com 20 px de sombra do GTK em volta da parte visível
+        get_frame_rect: () => ({x: 120, y: 80, width: 600, height: 400}),
+        get_buffer_rect: () => ({x: 100, y: 60, width: 640, height: 440}),
         get_gtk_application_id: () => wmClass, get_wm_class: () => wmClass,
         get_title() { return title; }, is_above() { return this.above; },
         make_above() { this.above = true; }, raise() { this.raised++; },
         get_monitor() { return this.monitor; }, move_to_monitor(m) { this.monitor = m; },
     });
+    actor.get_meta_window = () => win;
+    return win;
 }
 
 // ---------- 1. arraste sem Shift: nada acontece --------------------------
@@ -132,9 +162,18 @@ assert.deepEqual(calls[0].args, ['convert',
 
 // ---------- 3. janela do overlay é fixada acima e no monitor certo -------
 const ov = fakeWindow('mexerica-overlay');
+// maximizada no monitor 1, abaixo de uma barra superior de 32 px
+ov.get_frame_rect = () => ({x: 1920, y: 32, width: 1920, height: 1048});
 display.emit('window-created', ov);
 assert.ok(ov.above && ov.raised === 1 && ov.monitor === 1);
 windows.push(ov);
+assert.equal(calls.at(-1).action, 'show', 'janela posicionada: reenvia o centro');
+assert.deepEqual(calls.at(-1).args.slice(2), [580, 400 - 32],
+    'coordenadas locais à janela (abaixo da barra)');
+const ovBlur = ov.actor.get_effect('mexerica-blur');
+assert.ok(ovBlur && ovBlur.mode === Shell.BlurMode.BACKGROUND,
+    'tela atrás da roda fica borrada');
+assert.ok(ov.actor.eased['@effects.mexerica-blur.radius'] > 0, 'borrão entra animado');
 
 // ---------- 4. + Alt -> ferramentas, mesmo centro ------------------------
 pointer = [2700, 600, SHIFT | ALT];
@@ -142,6 +181,7 @@ advance(40);
 const last = calls.at(-1);
 assert.equal(last.args[0], 'tools');
 assert.equal(last.args[2], 580, 'centro não muda ao trocar de modo');
+assert.equal(last.args[3], 368);
 pointer = [2700, 600, SHIFT | CTRL];
 advance(40);
 assert.equal(calls.at(-1).args[0], 'actions');
@@ -185,13 +225,28 @@ assert.ok(late.count() > 0);
 t = 'Mexerica — foto.png';
 late.emit('notify::title');
 assert.ok(late.above, 'janela flutuante fica acima');
-assert.equal(late.count(), 0, 'parou de observar');
+assert.equal(late.count(), 2, 'parou de observar (sobram size-changed e unmanaged do vidro)');
 assert.ok(activated.includes(late));
+const glass = late.actor.children[0];
+assert.ok(glass?.get_effect('mexerica-blur'), 'janela ganha vidro atrás');
+assert.deepEqual([glass.pos, glass.size], [[20, 20], [600, 400]],
+    'vidro só na parte visível, sem a sombra');
+late.emit('unmanaged');
+assert.ok(glass.destroyed && late.count() === 0, 'janela fechada: vidro sai');
 
 // ---------- 10. clipboard via D-Bus e disable limpo -----------------------
 ext.SetClipboard('/home/r/foto.png');
 assert.equal(clipboard, '/home/r/foto.png');
+// ---------- 11. disable tira todo o vidro ---------------------------------
+const ed = fakeWindow('Editar — foto.png');
+display.emit('window-created', ed);
+windows.push(ed);
+assert.equal(ed.actor.children.length, 1);
 ext.disable();
 assert.equal(dnd.count(), 0);
+assert.equal(ed.actor.children.length, 0, 'vidro das janelas removido');
+assert.equal(ov.actor.get_effect('mexerica-blur'), null, 'efeito do overlay removido');
+assert.equal(ed.count(), 0);
+assert.equal(ov.count(), 0, 'sinais da janela da roda soltos');
 
-console.log('extensão: 10 cenários ok');
+console.log('extensão: 11 cenários ok');

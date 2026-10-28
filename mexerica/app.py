@@ -56,7 +56,7 @@ window.mexerica-overlay.background, window.mexerica-overlay decoration {
   box-shadow: none; border: none; outline: none;
 }
 window.mexerica-float, window.mexerica-float.background {
-  background-color: alpha(#1a1a1f, 0.55);
+  background-color: alpha(#1a1a1f, 0.40);
   background-image: linear-gradient(135deg, alpha(white, 0.16),
                                     alpha(white, 0.03) 55%, transparent);
   border: 1px solid alpha(white, 0.22);
@@ -73,11 +73,29 @@ window.mexerica-float headerbar {
 .mexerica-float-box { padding: 10px 14px; }
 
 /* janelas de edicao: vidro escuro */
+/* translucida; a extensao borra o que esta atras (vidro fosco) */
 window.mexerica-glass, window.mexerica-glass.background {
-  background-color: alpha(#16161b, 0.80);
-  background-image: linear-gradient(160deg, alpha(white, 0.10),
-                                    alpha(white, 0.02) 40%, transparent);
+  background-color: alpha(#14141a, 0.42);
+  background-image: linear-gradient(160deg, alpha(white, 0.14),
+                                    alpha(white, 0.03) 45%, transparent);
   color: #f5f5f7;
+  text-shadow: 0 1px 2px alpha(black, 0.35);
+}
+window.mexerica-glass button, window.mexerica-glass dropdown > button,
+window.mexerica-glass spinbutton {
+  background-color: alpha(white, 0.10);
+  border: 1px solid alpha(white, 0.12);
+}
+window.mexerica-glass button:hover { background-color: alpha(white, 0.18); }
+window.mexerica-glass button.suggested-action {
+  background: alpha(#ff8a1f, 0.88); color: #1a1208; text-shadow: none;
+  border-color: alpha(white, 0.25);
+}
+window.mexerica-glass button.suggested-action:hover {
+  background: #ff9a3c;
+}
+window.mexerica-glass scrolledwindow, window.mexerica-glass viewport {
+  background: none;
 }
 window.mexerica-glass decoration {
   border-radius: 14px;
@@ -196,15 +214,19 @@ class Overlay(Gtk.Window):
             self.state.progress = 0.0
             self.add_tick_callback(self._tick)
             self._size_to_monitor()
-            self.fullscreen()
+            # Maximizada, não tela cheia: o Mutter pinta um fundo preto
+            # atrás de janelas Wayland em tela cheia, e a roda precisa do
+            # fundo transparente. A extensão converte as coordenadas para a
+            # posição real da janela (abaixo da barra superior).
+            self.maximize()
             self.present()
         self.wheel = None
         self.area.queue_draw()
         self._arm_idle_hide()
 
     def _size_to_monitor(self) -> None:
-        # Fallback para quando o fullscreen não é aplicado (sem gerenciador
-        # de janelas); no GNOME o fullscreen manda.
+        # Fallback para quando o maximizar não é aplicado (sem gerenciador
+        # de janelas); no GNOME o maximizar manda.
         monitors = Gdk.Display.get_default().get_monitors()
         if monitors.get_n_items():
             geo = monitors.get_item(0).get_geometry()
@@ -242,7 +264,7 @@ class Overlay(Gtk.Window):
 
     # -- desenho -----------------------------------------------------------
     def _ensure_wheel(self, w: float, h: float) -> Wheel:
-        # recalcula se o tamanho mudou (o fullscreen chega depois do map)
+        # recalcula se o tamanho mudou (o maximizar chega depois do map)
         if self.wheel is None or self._wheel_size != (w, h):
             cx, cy = self.center
             if cx <= 0 and cy <= 0:

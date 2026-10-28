@@ -24,10 +24,10 @@ ACCENT = {
 }
 TITLE = {"convert": "Converter", "tools": "Ferramentas", "actions": "Ações"}
 
-# Vidro: tinta escura translúcida + brilho branco por cima. Sem blur real
-# (o cliente não enxerga o que está atrás), então a tinta segura a leitura.
-GLASS = (0.10, 0.10, 0.12, 0.42)
-GLASS_ALT = (0.10, 0.10, 0.12, 0.50)
+# Vidro: tinta escura translúcida + brilho branco por cima. O borrão do
+# fundo vem da extensão (Shell.BlurEffect); a tinta é leve para ele aparecer.
+GLASS = (0.10, 0.10, 0.14, 0.26)
+GLASS_ALT = (0.10, 0.10, 0.14, 0.34)
 SHEEN = (1.0, 1.0, 1.0)
 EDGE = (1.0, 1.0, 1.0, 0.28)
 FG = (0.98, 0.98, 0.98)
@@ -89,8 +89,8 @@ def _glass(cr, cx, cy, r_in, r_out, tint, extent=None):
     cr.fill_preserve()
     # reflexo: mais claro em cima à esquerda, some no meio
     lg = cairo.LinearGradient(cx - r_out, cy - r_out, cx + r_out, cy + r_out)
-    lg.add_color_stop_rgba(0.0, *SHEEN, 0.22)
-    lg.add_color_stop_rgba(0.45, *SHEEN, 0.06)
+    lg.add_color_stop_rgba(0.0, *SHEEN, 0.26)
+    lg.add_color_stop_rgba(0.45, *SHEEN, 0.08)
     lg.add_color_stop_rgba(1.0, *SHEEN, 0.0)
     cr.set_source(lg)
     cr.fill_preserve()

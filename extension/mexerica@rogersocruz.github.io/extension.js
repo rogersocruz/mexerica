@@ -7,13 +7,16 @@
 //   2. ler os modificadores (Shift/Alt/Ctrl) a qualquer momento;
 //   3. ler a lista de arquivos arrastados (seleção DND do Mutter);
 //   4. colocar a janela da roda acima de todas as outras;
-//   5. escrever no clipboard em nome do serviço.
+//   5. escrever no clipboard em nome do serviço;
+//   6. borrar o que está atrás das janelas do serviço (efeito de vidro):
+//      um app não enxerga o que está atrás dele, o compositor sim.
 // A roda em si é desenhada pelo serviço GTK (mexerica), que recebe o drop.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -27,6 +30,15 @@ const FLOAT_PREFIX = 'Mexerica — ';
 const POLL_MS = 30;               // leitura dos modificadores durante o arraste
 const RELEASE_GRACE_MS = 150;     // soltar Shift por menos que isso não fecha
 const END_HIDE_DELAY_MS = 400;    // dá tempo do serviço processar o drop
+
+// Vidro. Overlay: a tela inteira atrás da roda fica fosca e um pouco mais
+// escura. Janelas (editores, Flutuar): o fundo atrás delas fica fosco.
+const BLUR_EFFECT = 'mexerica-blur';
+const OVERLAY_BLUR_RADIUS = 28;
+const OVERLAY_BLUR_BRIGHTNESS = 0.72;
+const WINDOW_BLUR_RADIUS = 36;
+const WINDOW_BLUR_BRIGHTNESS = 0.92;
+const BLUR_FADE_MS = 160;
 
 const SHELL_IFACE = `
 <node>
@@ -66,6 +78,9 @@ export default class MexericaExtension extends Extension {
         this._uris = [];
         this._monitor = -1;
         this._watched = new Map();
+        this._blurred = new Map();    // MetaWindow -> {blur, ids}
+        this._tracked = new Map();    // janela da roda -> ids de sinais
+        this._sentOrigin = null;
 
         this._dnd = global.backend.get_dnd();
         this._dndIds = [
@@ -93,6 +108,14 @@ export default class MexericaExtension extends Extension {
         for (const [win, ids] of this._watched)
             ids.forEach(id => win.disconnect(id));
         this._watched = null;
+        for (const win of [...this._blurred.keys()])
+            this._unblurWindow(win);
+        this._blurred = null;
+        for (const [win, ids] of this._tracked)
+            ids.forEach(id => win.disconnect(id));
+        this._tracked = null;
+        for (const actor of global.get_window_actors())
+            actor.remove_effect_by_name(BLUR_EFFECT);
         this._dbus?.unexport();
         this._dbus = null;
     }
@@ -209,16 +232,40 @@ export default class MexericaExtension extends Extension {
     }
 
     // ---- conversa com o serviço ---------------------------------------
-    _show(mode) {
+    _show(mode, ov = this._overlayWindow()) {
         this._shownMode = mode;
         const [ax, ay] = this._anchor ?? global.get_pointer();
         this._monitor = global.display.get_current_monitor();
-        const geo = global.display.get_monitor_geometry(this._monitor);
+        // Coordenadas locais da janela da roda. Ela é maximizada (fica
+        // abaixo da barra superior); antes de existir, vale o monitor.
+        const origin = ov && ov.get_monitor() === this._monitor
+            ? ov.get_frame_rect()
+            : global.display.get_monitor_geometry(this._monitor);
+        this._sentOrigin = [origin.x, origin.y];
         const param = new GLib.Variant('(sasii)', [
-            mode, this._uris, Math.round(ax - geo.x), Math.round(ay - geo.y),
+            mode, this._uris, Math.round(ax - origin.x),
+            Math.round(ay - origin.y),
         ]);
         this._callApp('show', param);
         this._raiseOverlay();
+    }
+
+    _overlayWindow() {
+        for (const actor of global.get_window_actors()) {
+            const win = actor.get_meta_window();
+            if (isOurs(win) && win.get_title() === OVERLAY_TITLE)
+                return win;
+        }
+        return null;
+    }
+
+    _resendIfMoved(win) {
+        // a janela foi posicionada depois do show: corrige o centro
+        if (!this._shownMode || !this._sentOrigin)
+            return;
+        const f = win.get_frame_rect();
+        if (f.x !== this._sentOrigin[0] || f.y !== this._sentOrigin[1])
+            this._show(this._shownMode, win);
     }
 
     _hide() {
@@ -257,20 +304,115 @@ export default class MexericaExtension extends Extension {
             if (!win.is_above())
                 win.make_above();
             win.raise();
+            this._blurOverlay(win);
+            this._trackOverlay(win);
         } else {
             if (title.startsWith(FLOAT_PREFIX) && !win.is_above())
                 win.make_above();
             Main.activateWindow(win);
+            this._blurWindow(win);
         }
         return true;
     }
 
-    _raiseOverlay() {
-        for (const actor of global.get_window_actors()) {
-            const win = actor.get_meta_window();
-            if (isOurs(win) && win.get_title() === OVERLAY_TITLE)
-                this._pin(win);
+    // ---- vidro ----------------------------------------------------------
+    // Shell.BlurEffect no modo BACKGROUND borra o que já foi pintado atrás
+    // do ator. A janela do serviço é translúcida, então o borrão aparece
+    // através dela.
+    _withActor(win, fn, tries = 10) {
+        const actor = win.get_compositor_private();
+        if (actor) {
+            fn(actor);
+            return;
         }
+        if (tries > 0) {
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                this._withActor(win, fn, tries - 1);
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+    }
+
+    _blurOverlay(win) {
+        // tela cheia e sem sombra: o efeito vai direto no ator da janela
+        this._withActor(win, actor => {
+            if (actor.get_effect(BLUR_EFFECT))
+                return;
+            actor.add_effect_with_name(BLUR_EFFECT, new Shell.BlurEffect({
+                mode: Shell.BlurMode.BACKGROUND, radius: 0, brightness: 1,
+            }));
+            const ease = {
+                duration: BLUR_FADE_MS,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            };
+            actor.ease_property(`@effects.${BLUR_EFFECT}.radius`,
+                OVERLAY_BLUR_RADIUS, ease);
+            actor.ease_property(`@effects.${BLUR_EFFECT}.brightness`,
+                OVERLAY_BLUR_BRIGHTNESS, ease);
+        });
+    }
+
+    _blurWindow(win) {
+        // Janela comum: o buffer inclui a sombra do GTK, então o borrão
+        // fica num ator filho, do tamanho da parte visível, pintado antes
+        // da janela. Como filho, acompanha movimento e animações.
+        if (this._blurred.has(win))
+            return;
+        this._withActor(win, actor => {
+            if (!this._blurred || this._blurred.has(win))
+                return;
+            const blur = new Clutter.Actor({reactive: false});
+            blur.add_effect_with_name(BLUR_EFFECT, new Shell.BlurEffect({
+                mode: Shell.BlurMode.BACKGROUND,
+                radius: WINDOW_BLUR_RADIUS,
+                brightness: WINDOW_BLUR_BRIGHTNESS,
+            }));
+            actor.insert_child_below(blur, null);
+            const sync = () => {
+                const f = win.get_frame_rect();
+                const b = win.get_buffer_rect();
+                blur.set_position(f.x - b.x, f.y - b.y);
+                blur.set_size(f.width, f.height);
+            };
+            sync();
+            this._blurred.set(win, {
+                blur,
+                ids: [
+                    win.connect('size-changed', sync),
+                    win.connect('unmanaged', () => this._unblurWindow(win)),
+                ],
+            });
+        });
+    }
+
+    _unblurWindow(win) {
+        const entry = this._blurred?.get(win);
+        if (!entry)
+            return;
+        entry.ids.forEach(id => win.disconnect(id));
+        entry.blur.destroy();
+        this._blurred.delete(win);
+    }
+
+    _raiseOverlay() {
+        const win = this._overlayWindow();
+        if (win)
+            this._pin(win);
+    }
+
+    _trackOverlay(win) {
+        if (this._tracked.has(win))
+            return;
+        const ids = [
+            win.connect('position-changed', () => this._resendIfMoved(win)),
+            win.connect('size-changed', () => this._resendIfMoved(win)),
+        ];
+        ids.push(win.connect('unmanaged', () => {
+            ids.forEach(id => win.disconnect(id));
+            this._tracked.delete(win);
+        }));
+        this._tracked.set(win, ids);
+        this._resendIfMoved(win);
     }
 
     _onWindowCreated(win) {
