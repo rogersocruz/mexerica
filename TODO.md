@@ -7,8 +7,8 @@ especificação. Cores e medidas estão em `mexerica/theme.py`; as janelas, em
 `mexerica/editors/`. Também entrou o REMOVE BG.
 
 Pendências:
-- [ ] Comparar com os 4 quadros de referência do Tangerine. Eles não vieram
-      com a especificação: salvar em `docs/ref/` e ajustar as diferenças.
+- [ ] Comparar com os 4 quadros de referência. Eles não vieram com a
+      especificação: salvar em `docs/ref/` e ajustar as diferenças.
 - [ ] Abrir as janelas perto do ponteiro. No Wayland, um app não escolhe a
       própria posição; só a extensão poderia movê-las, e a especificação
       pedia para não mexer nela.
