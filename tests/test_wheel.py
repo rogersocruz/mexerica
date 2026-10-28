@@ -63,3 +63,32 @@ def test_render_png(tmp_path):
     out = tmp_path / "roda.png"
     surf.write_to_png(str(out))
     assert out.stat().st_size > 1000
+
+
+@pytest.mark.parametrize("mode,files", [
+    ("convert", ["foto.png"]), ("tools", ["foto.png"]),
+    ("actions", ["foto.png"]), ("tools", ["clip.mp4", "b.mp4"]),
+])
+def test_render_each_wheel(tmp_path, mode, files):
+    """Cada roda (com hover, ícones e dois anéis) desenha sem erro."""
+    cairo = pytest.importorskip("cairo")
+    from pathlib import Path
+    from mexerica import theme as TH
+    from mexerica.engine import options_for
+    from mexerica.wheel.render import WheelState, draw
+    ops = options_for([Path(f) for f in files], mode)
+    if mode == "convert":
+        ops = ops + ops[:4]          # força o 2º anel
+    W = 640
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, W)
+    cr = cairo.Context(surf)
+    w = Wheel(len(ops), W / 2, W / 2, W, W)
+    st = WheelState(mode=mode, labels=[TH.wheel_label(o) for o in ops],
+                    icons=[TH.wheel_icon(o) for o in ops], caption="1.1 MB",
+                    hover=0, hover_t={0: 1.0})
+    draw(cr, w, st)
+    out = tmp_path / f"{mode}.png"
+    surf.write_to_png(str(out))
+    assert out.stat().st_size > 5000
+    if mode != "convert":
+        assert all(i for i in st.icons), "ferramentas e ações têm ícone"

@@ -20,6 +20,7 @@ TEXT = "text"              # txt, md, html
 EBOOK = "ebook"            # epub
 SUBTITLE = "subtitle"      # srt, vtt, ass
 ARCHIVE = "archive"        # zip, tar.*, 7z, rar
+XOPP = "xopp"              # caderno do Xournal++
 FOLDER = "folder"
 OTHER = "other"
 
@@ -28,7 +29,7 @@ IMAGES = {IMAGE, VECTOR}
 DOCUMENTS = {DOC_TEXT, DOC_SLIDES, DOC_SHEET}
 MEDIA = {VIDEO, AUDIO}
 FILES = {IMAGE, VECTOR, VIDEO, AUDIO, PDF, DOC_TEXT, DOC_SLIDES, DOC_SHEET,
-         TEXT, EBOOK, SUBTITLE, ARCHIVE, OTHER}
+         TEXT, EBOOK, SUBTITLE, ARCHIVE, XOPP, OTHER}
 ANY = FILES | {FOLDER}
 
 _EXT = {
@@ -44,6 +45,7 @@ _EXT = {
     EBOOK: "epub",
     SUBTITLE: "srt vtt ass ssa",
     ARCHIVE: "zip tar gz tgz bz2 tbz2 xz txz zst 7z rar",
+    XOPP: "xopp",
 }
 EXT_TO_KIND = {e: k for k, exts in _EXT.items() for e in exts.split()}
 

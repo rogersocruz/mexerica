@@ -381,10 +381,10 @@ DOC_CONVERT = (
        for e in ("pdf", "docx", "txt", "html", "md")]
     + [
         Op("pdf-to-png", "PNG", CONVERT, frozenset({F.PDF}), _pdf_pages("png"),
-           result=DIR, suffix="-paginas", needs=("pdftoppm",),
+           result=DIR, suffix=" Pages", needs=("pdftoppm",),
            hint="Uma imagem por página"),
         Op("pdf-to-jpg", "JPG", CONVERT, frozenset({F.PDF}), _pdf_pages("jpg"),
-           result=DIR, suffix="-paginas", needs=("pdftoppm",),
+           result=DIR, suffix=" Pages", needs=("pdftoppm",),
            hint="Uma imagem por página"),
         Op("pdf-to-txt", "TXT", CONVERT, frozenset({F.PDF}), _pdf_to_text,
            ext="txt", needs=("pdftotext",)),
@@ -429,6 +429,27 @@ ARCHIVE_CONVERT = [
        frozenset({F.ARCHIVE, F.FOLDER, F.OTHER}), _pack(f), ext=f,
        needs=("bsdtar",), skip_exts=_same(f))
     for f in ("zip", "7z", "tar.gz")
+]
+
+# --------------------------------------------------------------------------
+# CONVERTER — Xournal++
+# --------------------------------------------------------------------------
+
+def _xopp_to_pdf(ctx: Ctx) -> list[Step]:
+    from . import xopp
+    return [lambda c: xopp.xopp_to_pdf(c.src, c.out, c.work)]
+
+
+def _pdf_to_xopp(ctx: Ctx) -> list[Step]:
+    from . import xopp
+    return [lambda c: xopp.pdf_to_xopp(c.src, c.out)]
+
+
+XOPP_CONVERT = [
+    Op("xopp-to-pdf", "PDF", CONVERT, frozenset({F.XOPP}), _xopp_to_pdf,
+       ext="pdf", needs=("qpdf",), hint="Exporta o caderno"),
+    Op("pdf-to-xopp", "XOPP", CONVERT, frozenset({F.PDF}), _pdf_to_xopp,
+       ext="xopp", needs=("pdfinfo",), hint="Abre o PDF para anotar"),
 ]
 
 # --------------------------------------------------------------------------
@@ -538,12 +559,43 @@ def _audio_same(*af: str) -> Callable[[Ctx], list[Step]]:
 
 _IMG1 = frozenset({F.IMAGE})
 
+RMBG_FUZZ = "12%"        # tolerância de cor do fundo liso
+
+
+def _remove_bg(ctx: Ctx) -> list[Step]:
+    """Fundo transparente. Com `rembg` (IA) funciona em qualquer foto; sem
+    ele, preenche a partir dos 4 cantos com tolerância de cor (fundos
+    lisos: logos, produtos, prints, documentos) e suaviza a borda."""
+    if T.has("rembg"):
+        return [T.cmd("rembg") + ["i", str(ctx.src), str(ctx.out)]]
+
+    def run(c: Ctx) -> None:
+        from .edits import image_size
+        w, h = image_size(c.src)
+        fills = []
+        for x, y in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
+            fills += ["-draw", f"color {x},{y} floodfill"]
+        subprocess.run(
+            T.cmd("magick") + [
+                f"{c.src}[0]", "-auto-orient", "-alpha", "set",
+                "-fuzz", RMBG_FUZZ, "-fill", "none", *fills,
+                "-channel", "A", "-blur", "0x0.7", "-level", "40%,100%",
+                "+channel", str(c.out)],
+            check=True, capture_output=True, stdin=subprocess.DEVNULL)
+    return [run]
+
+
 TOOL_OPS = [
     # janelas primeiro: ficam no topo da roda
     Op("img-edit", "Editar…", TOOLS, _IMG1, mode=EDITOR, max_files=1,
        needs=("magick",), hint="Recortar, girar, cor, tamanho"),
     Op("img-crop", "Recortar…", TOOLS, _IMG1, mode=EDITOR, max_files=1,
        needs=("magick",), hint="Recorte com proporção"),
+    Op("img-addbg", "Fundo…", TOOLS, _IMG1, mode=EDITOR, max_files=1,
+       needs=("magick",), hint="Fundo, cantos e sombra"),
+    Op("img-rmbg", "Remover fundo", TOOLS, _IMG1, _remove_bg, ext="png",
+       suffix=" Without Background", needs=("magick",),
+       hint="Fundo transparente (PNG)"),
     Op("img-size", "Tamanho…", TOOLS, _IMG1, mode=EDITOR,
        needs=("magick",), hint="Dimensões, qualidade e peso"),
     Op("vid-trim", "Cortar…", TOOLS, frozenset({F.VIDEO}), mode=EDITOR,
@@ -557,85 +609,85 @@ TOOL_OPS = [
        hint="Extrair, apagar ou girar páginas"),
     # imagens
     Op("img-compress", "Comprimir", TOOLS, frozenset({F.IMAGE}),
-       _img_tool("-strip", "-quality", "75"), suffix="-comprimido",
+       _img_tool("-strip", "-quality", "75"), suffix=" Compressed",
        needs=("magick",), hint="Qualidade 75, sem metadados"),
     Op("img-1mb", "≤ 1 MB", TOOLS, frozenset({F.IMAGE}),
        lambda c: _magick(c, "-strip", "-background", "white", "-alpha",
                          "remove", "-define", "jpeg:extent=1000KB"),
-       ext="jpg", suffix="-1mb", needs=("magick",), hint="JPG de até 1 MB",
+       ext="jpg", suffix=" 1MB", needs=("magick",), hint="JPG de até 1 MB",
        in_wheel=False),
     Op("img-half", "50%", TOOLS, frozenset({F.IMAGE}),
-       _img_tool("-resize", "50%"), suffix="-50", needs=("magick",),
+       _img_tool("-resize", "50%"), suffix=" Half", needs=("magick",),
        hint="Reduz pela metade", in_wheel=False),
     Op("img-rotate", "Girar 90°", TOOLS, frozenset({F.IMAGE}),
-       _img_tool("-rotate", "90"), suffix="-girada", needs=("magick",)),
+       _img_tool("-rotate", "90"), suffix=" Rotated", needs=("magick",)),
     Op("img-flip", "Espelhar", TOOLS, frozenset({F.IMAGE}),
-       _img_tool("-flop"), suffix="-espelhada", needs=("magick",),
+       _img_tool("-flop"), suffix=" Flipped", needs=("magick",),
        in_wheel=False),
     Op("img-gray", "P&B", TOOLS, frozenset({F.IMAGE}),
-       _img_tool("-colorspace", "Gray"), suffix="-pb", needs=("magick",),
+       _img_tool("-colorspace", "Gray"), suffix=" Grayscale", needs=("magick",),
        in_wheel=False),
     Op("img-qr", "Ler QR", TOOLS, frozenset({F.IMAGE}), _read_qr,
        result=TEXT, needs=("zbarimg",), hint="Copia o conteúdo"),
     Op("img-pdf", "Juntar PDF", TOOLS, frozenset({F.IMAGE}),
        lambda c: [T.cmd("magick") + [*map(str, c.srcs), "-auto-orient",
                                      str(c.out)]],
-       ext="pdf", suffix="-juntas", mode=ALL, needs=("magick",),
+       ext="pdf", suffix=" Merged", mode=ALL, needs=("magick",),
        available=_magick_can("pdf"), hint="Todas as imagens num PDF"),
     Op("img-collage", "Colagem", TOOLS, frozenset({F.IMAGE}),
        lambda c: [T.cmd("montage") + [*map(str, c.srcs), "-auto-orient",
                                       "-geometry", "600x600+6+6",
                                       "-background", "white", str(c.out)]],
-       ext="jpg", suffix="-colagem", mode=ALL, min_files=2,
+       ext="jpg", suffix=" Collage", mode=ALL, min_files=2,
        needs=("montage",)),
     # vídeo
     Op("vid-compress", "Comprimir", TOOLS, frozenset({F.VIDEO}),
-       _video_compress, ext="mp4", suffix="-comprimido", needs=("ffmpeg",),
+       _video_compress, ext="mp4", suffix=" Compressed", needs=("ffmpeg",),
        hint="H.264 CRF 28"),
     Op("vid-25mb", "≤ 25 MB", TOOLS, frozenset({F.VIDEO}),
-       _video_target_size(25), ext="mp4", suffix="-25mb",
+       _video_target_size(25), ext="mp4", suffix=" 25MB",
        needs=("ffmpeg", "ffprobe"), in_wheel=False),
     Op("vid-10mb", "≤ 10 MB", TOOLS, frozenset({F.VIDEO}),
-       _video_target_size(10), ext="mp4", suffix="-10mb",
+       _video_target_size(10), ext="mp4", suffix=" 10MB",
        needs=("ffmpeg", "ffprobe"), in_wheel=False),
     Op("vid-mute", "Sem áudio", TOOLS, frozenset({F.VIDEO}),
        lambda c: [_ff("-i", str(c.src), "-map", "0:v", "-c", "copy", "-an",
                       str(c.out))],
-       suffix="-mudo", needs=("ffmpeg",)),
+       suffix=" Muted", needs=("ffmpeg",)),
     Op("vid-2x", "2× vel.", TOOLS, frozenset({F.VIDEO}),
        lambda c: [_ff("-i", str(c.src), "-vf", "setpts=0.5*PTS",
                       "-af", "atempo=2.0", *_X264, "-c:a", "aac",
                       str(c.out))],
-       ext="mp4", suffix="-2x", needs=("ffmpeg",)),
+       ext="mp4", suffix=" 2x Speed", needs=("ffmpeg",)),
     Op("vid-rotate", "Girar 90°", TOOLS, frozenset({F.VIDEO}),
        lambda c: [_ff("-i", str(c.src), "-vf", "transpose=1", *_X264,
                       "-c:a", "copy", str(c.out))],
-       ext="mp4", suffix="-girado", needs=("ffmpeg",)),
+       ext="mp4", suffix=" Rotated", needs=("ffmpeg",)),
     Op("vid-snap", "Snapshot", TOOLS, frozenset({F.VIDEO}), _video_snapshot,
-       ext="jpg", suffix="-quadro", needs=("ffmpeg", "ffprobe"),
+       ext="jpg", suffix=" Snapshot", needs=("ffmpeg", "ffprobe"),
        hint="Quadro do meio do vídeo"),
     Op("vid-join", "Juntar", TOOLS, frozenset({F.VIDEO}),
-       lambda c: _concat(c, video=True), ext="mp4", suffix="-juntado",
+       lambda c: _concat(c, video=True), ext="mp4", suffix=" Merged",
        mode=ALL, min_files=2, needs=("ffmpeg",),
        hint="Mesma resolução recomendada"),
     # áudio
     Op("aud-normalize", "Normalizar", TOOLS, frozenset({F.AUDIO}),
        _audio_same("-af", "loudnorm=I=-16:TP=-1.5:LRA=11"),
-       suffix="-normalizado", needs=("ffmpeg",), hint="EBU R128, -16 LUFS"),
+       suffix=" Normalized", needs=("ffmpeg",), hint="EBU R128, -16 LUFS"),
     Op("aud-compress", "Comprimir", TOOLS, frozenset({F.AUDIO}),
        lambda c: [_ff("-i", str(c.src), "-map", "0:a:0", "-vn",
                       "-c:a", "libmp3lame", "-b:a", "128k", str(c.out))],
-       ext="mp3", suffix="-comprimido", needs=("ffmpeg",),
+       ext="mp3", suffix=" Compressed", needs=("ffmpeg",),
        hint="MP3 128 kbps"),
     Op("aud-mono", "Mono", TOOLS, frozenset({F.AUDIO}),
-       _audio_same("-ac", "1"), suffix="-mono", needs=("ffmpeg",)),
+       _audio_same("-ac", "1"), suffix=" Mono", needs=("ffmpeg",)),
     Op("aud-silence", "Tirar silêncio", TOOLS, frozenset({F.AUDIO}),
        _audio_same("-af", "silenceremove=start_periods=1:start_threshold="
                    "-50dB:stop_periods=-1:stop_threshold=-50dB:"
                    "stop_duration=0.6"),
-       suffix="-sem-silencio", needs=("ffmpeg",)),
+       suffix=" Without Silence", needs=("ffmpeg",)),
     Op("aud-join", "Juntar", TOOLS, frozenset({F.AUDIO}),
-       lambda c: _concat(c, video=False), suffix="-juntado", mode=ALL,
+       lambda c: _concat(c, video=False), suffix=" Merged", mode=ALL,
        min_files=2, needs=("ffmpeg",)),
     # PDF
     Op("pdf-compress", "Comprimir", TOOLS, frozenset({F.PDF}),
@@ -644,29 +696,29 @@ TOOL_OPS = [
                                  "-dCompatibilityLevel=1.5", "-dNOPAUSE",
                                  "-dBATCH", "-dQUIET",
                                  f"-sOutputFile={c.out}", str(c.src)]],
-       suffix="-comprimido", needs=("gs",), hint="Ghostscript /ebook"),
+       suffix=" Compressed", needs=("gs",), hint="Ghostscript /ebook"),
     Op("pdf-split", "Dividir", TOOLS, frozenset({F.PDF}),
        lambda c: (c.out.mkdir(parents=True, exist_ok=True),
                   [T.cmd("qpdf") + ["--split-pages", str(c.src),
                                     str(c.out / "pagina-%d.pdf")]])[1],
-       result=DIR, suffix="-paginas", needs=("qpdf",),
+       result=DIR, suffix=" Pages", needs=("qpdf",),
        hint="Um PDF por página"),
     Op("pdf-rotate", "Girar 90°", TOOLS, frozenset({F.PDF}),
        lambda c: [T.cmd("qpdf") + [str(c.src), str(c.out), "--rotate=+90"]],
-       suffix="-girado", needs=("qpdf",)),
+       suffix=" Rotated", needs=("qpdf",)),
     Op("pdf-images", "Extrair imagens", TOOLS, frozenset({F.PDF}),
        lambda c: (c.out.mkdir(parents=True, exist_ok=True),
                   [T.cmd("pdfimages") + ["-all", str(c.src),
                                          str(c.out / "img")]])[1],
-       result=DIR, suffix="-imagens", needs=("pdfimages",)),
+       result=DIR, suffix=" Images", needs=("pdfimages",)),
     Op("pdf-merge", "Juntar", TOOLS, frozenset({F.PDF}),
        lambda c: [T.cmd("qpdf") + ["--empty", "--pages",
                                    *map(str, c.srcs), "--", str(c.out)]],
-       suffix="-juntado", mode=ALL, min_files=2, needs=("qpdf",)),
+       suffix=" Merged", mode=ALL, min_files=2, needs=("qpdf",)),
     # genéricas
     Op("strip-meta", "Sem metadados", TOOLS,
        frozenset({F.IMAGE, F.PDF, F.VIDEO, F.AUDIO}), _strip,
-       suffix="-limpo", needs=("exiftool",),
+       suffix=" Without Metadata", needs=("exiftool",),
        hint="Remove EXIF/GPS/autor"),
     Op("show-meta", "Metadados", TOOLS, frozenset(F.FILES), _show_meta,
        result=TEXT, needs=("exiftool",), hint="Ler metadados"),
@@ -690,7 +742,8 @@ ACTION_OPS = [
 ]
 
 ALL_OPS: list[Op] = (IMAGE_CONVERT + VIDEO_CONVERT + SUBTITLE_CONVERT
-                     + DOC_CONVERT + ARCHIVE_CONVERT + TOOL_OPS + ACTION_OPS)
+                     + DOC_CONVERT + ARCHIVE_CONVERT + XOPP_CONVERT
+                     + TOOL_OPS + ACTION_OPS)
 BY_ID = {op.id: op for op in ALL_OPS}
 assert len(BY_ID) == len(ALL_OPS), "ids de operação duplicados"
 

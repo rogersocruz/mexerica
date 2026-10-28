@@ -189,7 +189,7 @@ def test_audio(wav, d):
     w2 = d / "som2.wav"
     shutil.copy(wav, w2)
     joined = _one(run(BY_ID["aud-join"], [wav, w2]))
-    assert joined.name == "som-juntado.wav"
+    assert joined.name == "som Merged.wav"
 
 
 @need("qpdf", "pdftoppm", "pdftotext", "gs")
@@ -284,7 +284,8 @@ def test_svg(d):
 
 def test_editors_top_of_tools_wheel(png, mp4):
     ids = [o.id for o in options_for([png], TOOLS)]
-    assert ids[:3] == ["img-edit", "img-crop", "img-size"]
+    assert ids[:5] == ["img-edit", "img-crop", "img-addbg", "img-rmbg",
+                       "img-size"]
     # presets antigos saem da roda, mas continuam na CLI
     assert "img-1mb" not in ids and "img-1mb" in BY_ID
     two = [o.id for o in options_for([png, png], TOOLS)]
@@ -298,12 +299,12 @@ def test_image_edit_crop_after_rotate(png):
     from mexerica.engine import edits as E
     # 320x200 girada vira 200x320; metade de cima = 200x160
     edit = E.ImageEdit(rotate=90, crop=(0, 0, 1, 0.5), saturation=-100)
-    out = _one(run(E.image_edit_op(BY_ID["img-edit"], edit, "-editada"),
+    out = _one(run(E.image_edit_op(BY_ID["img-edit"], edit, " Edited"),
                    [png]))
-    assert out.name == "foto-editada.png"
+    assert out.name == "foto Edited.png"
     assert E.image_size(out) == (200, 160)
     small = E.ImageEdit(max_side=100, ext="jpg", target_kb=20)
-    out = _one(run(E.image_edit_op(BY_ID["img-size"], small, "-reduzida"),
+    out = _one(run(E.image_edit_op(BY_ID["img-size"], small, " Resized"),
                    [png]))
     assert out.suffix == ".jpg" and max(E.image_size(out)) == 100
 
@@ -316,7 +317,7 @@ def test_trim_exact_and_remove(mp4):
     assert abs(E.duration(out) - 1.0) < 0.15
     out = _one(run(E.trim_op(BY_ID["vid-trim"], 0.5, 1.5, fast=False,
                              remove=True), [mp4]))
-    assert out.name == "clip-sem-trecho.mp4"
+    assert out.name == "clip Cut.mp4"
     assert abs(E.duration(out) - 1.0) < 0.2
     assert E.keyframe_before(mp4, 1.5) == 0.0     # GOP longo: só o quadro 0
 
@@ -327,6 +328,97 @@ def test_pdf_pages(pdf):
     assert E._ranges([1, 2, 3, 5, 7, 8]) == "1-3,5,7-8"
     out = _one(run(E.pdf_pages_op(BY_ID["pdf-pages"], "extract", [2], 2),
                    [pdf]))
-    assert out.name == "doc-p2.pdf" and E.page_count(out) == 1
+    assert out.name == "doc Page 2.pdf" and E.page_count(out) == 1
     with pytest.raises(ValueError):
         E.pdf_pages_op(BY_ID["pdf-pages"], "delete", [1, 2], 2)
+
+
+def test_suffixes_chain(png):
+    """Sufixos em inglês, com espaço, encadeando como no Tangerine."""
+    crop = run(BY_ID["img-compress"], [png])
+    first = _one(crop)
+    assert first.name == "foto Compressed.png"
+    second = _one(run(BY_ID["img-rotate"], [first]))
+    assert second.name == "foto Compressed Rotated.png"
+    # conversão pura: só troca a extensão
+    assert _one(run(BY_ID["to-jpg"], [second])).name == \
+        "foto Compressed Rotated.jpg"
+
+
+# ------------------------------------------------------------- Xournal++
+
+@need("qpdf", "pdfinfo", "pdftotext")
+def test_xopp_roundtrip(pdf, d):
+    import gzip
+    xo = _one(run(BY_ID["pdf-to-xopp"], [pdf]))
+    assert xo.name == "doc.xopp"
+    xml = gzip.decompress(xo.read_bytes()).decode()
+    assert xml.count("<page ") == 2 and str(pdf) in xml
+    # anota a página 2 e exporta: fundo do PDF por baixo + anotação
+    xml = xml.replace('<background type="pdf" pageno="2ll"/>\n<layer/>',
+                      '<background type="pdf" pageno="2ll"/>\n<layer>'
+                      '<text font="Sans" size="14" x="72" y="300" '
+                      'color="#000000ff">Nota manuscrita</text></layer>')
+    xo.write_bytes(gzip.compress(xml.encode()))
+    out = _one(run(BY_ID["xopp-to-pdf"], [xo]))
+    text = subprocess.run(["pdftotext", str(out), "-"], capture_output=True,
+                          text=True).stdout
+    assert "Ola" in text and "Pagina 2" in text and "Nota manuscrita" in text
+
+
+def test_xopp_solid_pages(d):
+    import gzip
+    from mexerica.engine import xopp
+    x = d / "notas.xopp"
+    x.write_bytes(gzip.compress(
+        b'<xournal fileversion="4"><page width="300" height="200">'
+        b'<background type="solid" color="#ffffffff" style="graph"/>'
+        b'<layer><stroke tool="pen" color="#ff0000ff" width="2 1 3">'
+        b'10 10 50 50 90 10</stroke></layer></page></xournal>'))
+    out = d / "notas.pdf"
+    xopp.render_annotations(xopp.read(x), out)
+    assert out.read_bytes().startswith(b"%PDF")
+
+
+@need("magick")
+def test_crop_square_ratio(png):
+    """Proporção 1:1 no recorte gera uma imagem quadrada."""
+    from mexerica import cropmath as CM
+    from mexerica.engine import edits as E
+    w, h = E.image_size(png)                         # 320 x 200
+    rect = CM.largest_centered(1.0, w, h)
+    out = _one(run(E.image_edit_op(BY_ID["img-crop"],
+                                   E.ImageEdit(crop=tuple(rect)),
+                                   " Cropped"), [png]))
+    assert out.name == "foto Cropped.png"
+    ow, oh = E.image_size(out)
+    assert ow == oh == 200
+    # arrastar um canto mantendo 1:1 continua quadrado
+    k = CM.norm_ratio(1.0, w, h)
+    r = CM.resized("se", [0.1, 0.1, 0.3, 0.3 * w / h], 0.2, 0.05, k)
+    assert abs(r[2] * w - r[3] * h) < 1e-6
+
+
+@need("magick")
+def test_add_background(png):
+    from mexerica.engine import background as B
+    from mexerica.engine import edits as E
+    style = B.BgStyle(padding=40, corners=30, shadow=50, ratio=1.0)
+    out = _one(run(E.add_background_op(BY_ID["img-addbg"], style), [png]))
+    assert out.name == "foto With Background.png"
+    assert E.image_size(out) == (400, 400)           # 320+80, quadrado
+
+
+@need("magick")
+def test_remove_background(d):
+    if T.has("rembg"):
+        pytest.skip("com rembg o resultado depende do modelo")
+    src = d / "logo.png"
+    sh(*T.cmd("magick"), "-size", "200x120", "xc:#f0f0f0", "-fill", "#ff5a1f",
+       "-draw", "circle 100,60 100,20", str(src))
+    out = _one(run(BY_ID["img-rmbg"], [src]))
+    assert out.name == "logo Without Background.png"
+    px = subprocess.run(T.cmd("magick") + [str(out), "-format",
+                        "%[fx:p{2,2}.a] %[fx:p{100,60}.a]", "info:"],
+                        capture_output=True, text=True).stdout.split()
+    assert float(px[0]) == 0 and float(px[1]) == 1

@@ -101,7 +101,7 @@ def _collapse_single(tmp_dir: Path, final: Path, res: Result) -> bool:
     if len(items) != 1 or not items[0].is_file():
         return False
     item = items[0]
-    name = F.stem(final).removesuffix("-paginas") + item.suffix
+    name = F.stem(final).removesuffix(" Pages") + item.suffix
     target = unique_path(final.with_name(name))
     shutil.move(str(item), str(target))
     res.outputs.append(target)

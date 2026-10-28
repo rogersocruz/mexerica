@@ -31,7 +31,12 @@ ou solte Alt/Ctrl. A roda continua no mesmo lugar.
 - **Vídeo:** MP4, MOV, MKV (sem reencodar), WebM, AVI e GIF animado. Também
   extrai o áudio para MP3, M4A ou WAV.
 - **Áudio:** MP3, M4A, WAV, FLAC, OGG, Opus e AIFF.
-- **PDF:** PNG ou JPG (uma imagem por página), TXT e DOCX (experimental).
+- **PDF:** PNG ou JPG (uma imagem por página), TXT, DOCX (experimental) e
+  XOPP (abre o PDF no Xournal++ para anotar).
+- **Xournal++ (.xopp):** PDF. Desenha traços, textos, imagens e fundos
+  pautados ou quadriculados; páginas com PDF de fundo mantêm o PDF original
+  por baixo, ainda vetorial. Não precisa do Xournal++ instalado; se ele
+  estiver, é usado.
 - **Documentos do Office:** PDF, DOCX, ODT, RTF, TXT e EPUB; PPTX/ODP; XLSX/ODS/CSV.
 - **Texto:** Markdown, HTML e TXT para PDF, DOCX, ODT, HTML, EPUB, MD e TXT.
 - **EPUB:** PDF, DOCX, TXT, HTML e MD.
@@ -41,17 +46,30 @@ ou solte Alt/Ctrl. A roda continua no mesmo lugar.
 
 **Ferramentas (Shift + Alt)**
 
-As opções com "…" ficam no topo da roda e abrem uma janela. A janela abre na
+Na roda, os rótulos das ferramentas e ações ficam em inglês e caixa-alta
+(EDIT, CROP, ADD BG…), com um ícone de linha. O miolo mostra o tamanho do
+arquivo e, com o ponteiro sobre um setor, o nome dele.
+
+As opções que abrem janela ficam no topo da roda. A janela abre na
 hora, e a prévia, as miniaturas e a forma de onda carregam em segundo plano.
 **Esc** cancela; **Enter** ou **Ctrl+S** salva. Salvar fecha a janela, e o
 trabalho segue com notificação, como as outras operações.
 
 - **Imagem**
-  - *Editar…*: recorte com proporção (livre, original, 1:1, 4:3, 16:9, 9:16,
-    4:5…), girar e espelhar (teclas R, L, H, V), brilho, contraste,
-    saturação, P&B, escala, formato e qualidade, com prévia ao vivo.
-  - *Recortar…*: a mesma janela, só com recorte e giro.
-  - *Tamanho…*: lado maior ou %, formato, qualidade e peso máximo. Mostra o
+  - *EDIT*: recorte com proporção, girar e espelhar (teclas R, L, H, V),
+    brilho, contraste, saturação, P&B, escala, formato e qualidade, com
+    prévia ao vivo.
+  - *CROP* (Crop Image): proporção Free, 1:1, 16:9, 9:16, 4:3 ou 3:4 e
+    campos W × H em pixels, sincronizados com o retângulo.
+  - *ADD BG* (estilo CleanShot): a imagem com cantos arredondados e sombra
+    sobre um gradiente, uma cor (ou cor personalizada) ou outra imagem, com
+    margem e proporção. A prévia ao vivo é o mesmo desenho do arquivo
+    final. Sempre PNG.
+  - *REMOVE BG*: fundo transparente (PNG), em um clique. Sem nada a mais,
+    remove fundos lisos (logos, produtos, prints, documentos) a partir dos
+    cantos. Com o [rembg](https://github.com/danielgatis/rembg) instalado,
+    usa IA e funciona com fotos.
+  - *RESIZE*: lado maior ou %, formato, qualidade e peso máximo. Mostra o
     tamanho final real antes de salvar e funciona em lote.
   - Um clique: comprimir, girar 90° e ler QR code (o conteúdo vai para o
     clipboard). Com várias imagens: juntar em PDF e colagem.
@@ -83,6 +101,9 @@ para…, mover para…, **flutuar** (uma janelinha sempre visível de onde você
 arrasta o arquivo depois) e ZIP de tudo.
 
 **Regras que valem para todas as operações**
+- O resultado ganha um sufixo em inglês, que se encadeia:
+  `foto Cropped.jpg`, `foto Cropped With Background.png`. Conversão pura só
+  troca a extensão.
 - Nunca sobrescreve um arquivo: se o nome já existe, vira `foto (2).jpg`.
 - Grava primeiro num temporário oculto e só move para o nome final quando
   termina. Se falhar, nenhum arquivo quebrado fica para trás.
@@ -211,6 +232,8 @@ precisa dos tipos de entrada que aceita, dos programas que usa e de um
 3. Tarjar/borrar áreas no *Editar…*; reordenar páginas no *Páginas…*.
 4. Preferências: tecla do gesto, qualidade padrão, pasta de saída.
 5. Menu de serviço do Dolphin e Nautilus Scripts reaproveitando o motor.
+
+A lista detalhada está em [TODO.md](TODO.md).
 
 ## Licença
 

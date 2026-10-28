@@ -31,6 +31,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
 from . import APP_ID, __version__  # noqa: E402
+from . import theme as TH  # noqa: E402
 from .engine import ACTIONS, CONVERT, TOOLS, options_for, run  # noqa: E402
 from .engine import tools as T  # noqa: E402
 from .engine.ops import ACTION, EDITOR, TEXT, Op  # noqa: E402
@@ -38,7 +39,7 @@ from .engine import BY_ID  # noqa: E402
 from .editors import open_editor  # noqa: E402
 from .engine.runner import unique_path  # noqa: E402
 from .wheel.geometry import Wheel  # noqa: E402
-from .wheel.render import WheelState, draw  # noqa: E402
+from .wheel.render import Snapshot, WheelState, draw  # noqa: E402
 
 log = logging.getLogger("mexerica")
 
@@ -49,83 +50,14 @@ SHELL_IFACE = "io.github.rogersocruz.Mexerica.Shell"
 EXT_UUID = "mexerica@rogersocruz.github.io"
 IDLE_HIDE_MS = 4000      # trava de segurança: overlay sem atividade some
 
-CSS = b"""
+CSS = """
 window.mexerica-overlay, window.mexerica-overlay > *,
 window.mexerica-overlay.background, window.mexerica-overlay decoration {
   background: none; background-color: transparent;
   box-shadow: none; border: none; outline: none;
 }
-window.mexerica-float, window.mexerica-float.background {
-  background-color: alpha(#1a1a1f, 0.40);
-  background-image: linear-gradient(135deg, alpha(white, 0.16),
-                                    alpha(white, 0.03) 55%, transparent);
-  border: 1px solid alpha(white, 0.22);
-  border-radius: 16px;
-  color: #fafafa;
-}
-window.mexerica-float decoration {
-  border-radius: 16px;
-  box-shadow: 0 8px 28px alpha(black, 0.35);
-}
-window.mexerica-float headerbar {
-  background: none; box-shadow: none; border: none; color: inherit;
-}
 .mexerica-float-box { padding: 10px 14px; }
-
-/* janelas de edicao: vidro escuro */
-/* translucida; a extensao borra o que esta atras (vidro fosco) */
-window.mexerica-glass, window.mexerica-glass.background {
-  background-color: alpha(#14141a, 0.42);
-  background-image: linear-gradient(160deg, alpha(white, 0.14),
-                                    alpha(white, 0.03) 45%, transparent);
-  color: #f5f5f7;
-  text-shadow: 0 1px 2px alpha(black, 0.35);
-}
-window.mexerica-glass button, window.mexerica-glass dropdown > button,
-window.mexerica-glass spinbutton {
-  background-color: alpha(white, 0.10);
-  border: 1px solid alpha(white, 0.12);
-}
-window.mexerica-glass button:hover { background-color: alpha(white, 0.18); }
-window.mexerica-glass button.suggested-action {
-  background: alpha(#ff8a1f, 0.88); color: #1a1208; text-shadow: none;
-  border-color: alpha(white, 0.25);
-}
-window.mexerica-glass button.suggested-action:hover {
-  background: #ff9a3c;
-}
-window.mexerica-glass scrolledwindow, window.mexerica-glass viewport {
-  background: none;
-}
-window.mexerica-glass decoration {
-  border-radius: 14px;
-  box-shadow: 0 12px 40px alpha(black, 0.45), 0 0 0 1px alpha(white, 0.14);
-}
-window.mexerica-glass headerbar {
-  background: alpha(white, 0.04); box-shadow: none;
-  border-bottom: 1px solid alpha(white, 0.08);
-}
-.mexerica-section {
-  font-size: 0.78em; font-weight: 700; letter-spacing: 0.08em;
-  color: alpha(white, 0.55); margin-top: 8px;
-}
-.mexerica-result { font-feature-settings: "tnum"; color: alpha(white, 0.85); }
-.mexerica-status { color: alpha(white, 0.65); font-size: 0.9em; }
-.mexerica-status.error { color: #ff8a80; }
-.mexerica-frame, .mexerica-timeline {
-  background: alpha(black, 0.35); border-radius: 10px;
-  border: 1px solid alpha(white, 0.10);
-}
-.mexerica-timeline { min-height: 64px; }
-togglebutton.mexerica-page {
-  padding: 6px; border-radius: 10px; background: alpha(white, 0.05);
-  border: 2px solid transparent;
-}
-togglebutton.mexerica-page:checked {
-  background: alpha(#ff8a1f, 0.22); border-color: #ff8a1f; color: white;
-}
-.mexerica-float-box button { color: alpha(white, 0.85); }
-"""
+""" + TH.CSS
 
 
 def paths_from_uris(uris) -> list[Path]:
@@ -146,11 +78,26 @@ def paths_from_filelist(value) -> list[Path]:
 
 
 def _caption(paths: list[Path]) -> str:
+    """Notificações: nome do arquivo ou quantos são."""
     if not paths:
         return ""
     if len(paths) == 1:
         return paths[0].name
     return f"{len(paths)} arquivos"
+
+
+def _size_caption(paths: list[Path]) -> str:
+    """Miolo da roda: tamanho total, como no Tangerine ("1.1 MB")."""
+    total = 0
+    for p in paths:
+        try:
+            if p.is_file():
+                total += p.stat().st_size
+        except OSError:
+            pass
+    if total:
+        return TH.human_size(total)
+    return f"{len(paths)} items" if paths else ""
 
 
 # --------------------------------------------------------------------------
@@ -170,7 +117,8 @@ class Overlay(Gtk.Window):
         self.center = (0.0, 0.0)
         self.wheel: Wheel | None = None
         self._wheel_size = (0, 0)
-        self._anim_start = None
+        self._anim_last = None
+        self._ticking = False
         self._idle_src = 0
         self._dragging = False
 
@@ -201,18 +149,30 @@ class Overlay(Gtk.Window):
 
     # -- abrir/fechar ------------------------------------------------------
     def open(self, mode: str, paths: list[Path], x: int, y: int) -> None:
-        self.state.mode = mode
+        first = not self.get_visible()
+        st = self.state
+        if not first and mode != st.mode and self.ops:
+            # troca de modo: os setores antigos somem enquanto os novos
+            # aparecem; o anel fica parado
+            old = self._ensure_wheel(self.area.get_width(),
+                                     self.area.get_height())
+            st.prev = Snapshot(old, list(st.labels), list(st.icons))
+            st.fade = 0.0
+            st.hover_t.clear()
+            self._animate()
+        st.mode = mode
         if paths:
             self.paths = paths
         self.center = (float(x), float(y))
         self._refresh_ops()
-        first = not self.get_visible()
         if first:
-            self.state.hover = None
-            self.state.cancel_hover = False
-            self._anim_start = None
-            self.state.progress = 0.0
-            self.add_tick_callback(self._tick)
+            st.hover = None
+            st.cancel_hover = False
+            st.hover_t.clear()
+            st.prev = None
+            st.fade = 1.0
+            st.progress = 0.0
+            self._animate()
             self._size_to_monitor()
             # Maximizada, não tela cheia: o Mutter pinta um fundo preto
             # atrás de janelas Wayland em tela cheia, e a roda precisa do
@@ -256,9 +216,10 @@ class Overlay(Gtk.Window):
 
     def _refresh_ops(self) -> None:
         self.ops = options_for(self.paths, self.state.mode)
-        self.state.labels = [op.label for op in self.ops]
+        self.state.labels = [TH.wheel_label(op) for op in self.ops]
+        self.state.icons = [TH.wheel_icon(op) for op in self.ops]
         self.state.hints = [op.hint for op in self.ops]
-        self.state.caption = _caption(self.paths)
+        self.state.caption = _size_caption(self.paths)
         self.state.loading = not self.paths
         self.wheel = None
 
@@ -276,13 +237,43 @@ class Overlay(Gtk.Window):
     def _on_draw(self, _area, cr, w, h) -> None:
         draw(cr, self._ensure_wheel(w, h), self.state)
 
+    def _animate(self) -> None:
+        if not self._ticking:
+            self._ticking = True
+            self._anim_last = None
+            self.add_tick_callback(self._tick)
+
     def _tick(self, _widget, clock) -> bool:
+        """Entrada (escala+opacidade), hover (cor e crescimento) e troca de
+        modo (crossfade), todos no mesmo relógio de quadros."""
         now = clock.get_frame_time()
-        if self._anim_start is None:
-            self._anim_start = now
-        self.state.progress = min(1.0, (now - self._anim_start) / 140_000)
+        dt = 0.0 if self._anim_last is None else (now - self._anim_last) / 1000
+        self._anim_last = now
+        st = self.state
+        busy = False
+        if st.progress < 1:
+            st.progress = min(1.0, st.progress + dt / TH.ENTER_MS)
+            busy |= st.progress < 1
+        if st.fade < 1:
+            st.fade = min(1.0, st.fade + dt / TH.MODE_FADE_MS)
+            if st.fade >= 1:
+                st.prev = None
+            busy |= st.fade < 1
+        step = dt / TH.HOVER_MS
+        for idx in set(st.hover_t) | ({st.hover} - {None}):
+            target = 1.0 if idx == st.hover else 0.0
+            cur = st.hover_t.get(idx, 0.0)
+            cur = min(target, cur + step) if target > cur \
+                else max(target, cur - step)
+            if cur <= 0:
+                st.hover_t.pop(idx, None)
+            else:
+                st.hover_t[idx] = cur
+            busy |= cur != target
         self.area.queue_draw()
-        return self.state.progress < 1.0
+        if not busy:
+            self._ticking = False
+        return busy
 
     # -- interação ---------------------------------------------------------
     def _hover(self, x: float, y: float) -> None:
@@ -293,7 +284,7 @@ class Overlay(Gtk.Window):
         if hover != self.state.hover or cancel != self.state.cancel_hover:
             self.state.hover = hover
             self.state.cancel_hover = cancel
-            self.area.queue_draw()
+            self._animate()
         self._arm_idle_hide()
 
     def _on_drag_enter(self, _t, x, y):
@@ -308,7 +299,7 @@ class Overlay(Gtk.Window):
     def _on_drag_leave(self, _t):
         self._dragging = False
         self.state.hover = None
-        self.area.queue_draw()
+        self._animate()
 
     def _on_drop_value(self, target, _pspec):
         paths = paths_from_filelist(target.get_value())
@@ -361,7 +352,7 @@ class Overlay(Gtk.Window):
             return True
         else:
             return False
-        self.area.queue_draw()
+        self._animate()
         return True
 
 
@@ -375,8 +366,7 @@ class FloatWindow(Gtk.Window):
         super().__init__(application=app,
                          title=f"Mexerica — {paths[0].name if n == 1 else f'{n} arquivos'}",
                          resizable=False, default_width=220)
-        self.add_css_class("mexerica-float")
-        self.remove_css_class("background")
+        self.add_css_class("mx-window")
         self.paths = paths
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         box.add_css_class("mexerica-float-box")
@@ -447,16 +437,12 @@ class MexericaApp(Gtk.Application):
         self.hold()          # serviço: continua vivo sem janelas
         provider = Gtk.CssProvider()
         if hasattr(provider, "load_from_string"):       # GTK >= 4.12
-            provider.load_from_string(CSS.decode())
+            provider.load_from_string(CSS)
         else:
-            provider.load_from_data(CSS, -1)
+            provider.load_from_data(CSS.encode(), -1)
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-        # vidro escuro: os controles do tema precisam ser os escuros
-        settings = Gtk.Settings.get_default()
-        if settings is not None:
-            settings.props.gtk_application_prefer_dark_theme = True
 
         def add(name, ptype, cb):
             act = Gio.SimpleAction.new(

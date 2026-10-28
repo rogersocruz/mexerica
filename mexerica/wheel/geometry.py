@@ -1,18 +1,23 @@
 """Geometria da roda radial (puro Python, sem GTK, testável).
 
-Até 10 itens: um anel. Mais que isso: os 10 primeiros no anel interno e o
-resto no externo. O setor 0 começa no topo e segue no sentido horário.
-O miolo é a zona de cancelar.
+Até 10 itens: um anel, e os setores dividem o círculo igualmente (4 itens =
+90° cada). Mais que isso: os 10 primeiros no anel interno e o resto no
+externo. O setor 0 fica centrado no topo e a ordem segue o sentido horário.
+O miolo é a zona de cancelar. Medidas em theme.py, em função de R.
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
 
-CANCEL_R = 46.0
-RINGS = ((62.0, 152.0, 10), (158.0, 240.0, 16))   # (r_in, r_out, capacidade)
-SLOP = 48.0          # tolerância além do anel externo que ainda seleciona
-MARGIN = 12.0
+from .. import theme as TH
+
+_R = TH.WHEEL_R
+CANCEL_R = TH.CORE_RING_OUT * _R
+RINGS = ((TH.SECTOR_IN * _R, TH.SECTOR_OUT * _R, TH.RING_CAPACITY[0]),
+         (TH.OUTER_IN * _R, TH.OUTER_OUT * _R, TH.RING_CAPACITY[1]))
+SLOP = TH.SLOP
+MARGIN = TH.EDGE_MARGIN
 
 
 @dataclass(frozen=True)
@@ -39,6 +44,9 @@ class Wheel:
         self.n = max(0, min(n_items, sum(c for _, _, c in RINGS)))
         self.sectors = self._layout(self.n)
         self.radius = self.sectors[-1].r_out if self.sectors else RINGS[0][1]
+        # aro: R com um anel; com dois, um pouco além do anel externo
+        self.rim = _R if self.radius <= RINGS[0][1] \
+            else self.radius + TH.RIM_PAD * _R
         self.cx, self.cy = self._clamp(cx, cy, width, height)
 
     @staticmethod
@@ -59,7 +67,7 @@ class Wheel:
         return sectors
 
     def _clamp(self, cx, cy, w, h):
-        r = self.radius + MARGIN
+        r = self.rim + MARGIN
         if w is not None and w > 2 * r:
             cx = min(max(cx, r), w - r)
         if h is not None and h > 2 * r:
@@ -72,7 +80,7 @@ class Wheel:
         dist = math.hypot(dx, dy)
         if dist < CANCEL_R or not self.sectors:
             return None
-        if dist > self.radius + SLOP:
+        if dist > self.rim + SLOP:
             return None
         ang = math.atan2(dy, dx)
         n_rings = self.sectors[-1].ring + 1

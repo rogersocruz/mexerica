@@ -121,6 +121,17 @@ def image_edit_op(base: Op, edit: ImageEdit, suffix: str) -> Op:
     return derive(base, build, ext=ext, suffix=suffix)
 
 
+def add_background_op(base: Op, style) -> Op:
+    """Imagem sobre fundo (engine/background.py). Sempre PNG: os cantos
+    arredondados e a sombra precisam de transparência na prévia, e o
+    resultado costuma ir para apresentações e posts."""
+    from .background import render_file
+
+    def build(ctx: Ctx) -> list[Step]:
+        return [lambda c: render_file(c.src, c.out, style, c.work)]
+    return derive(base, build, ext="png", suffix=" With Background")
+
+
 # --------------------------------------------------------------------------
 # Vídeo / áudio
 # --------------------------------------------------------------------------
@@ -188,7 +199,7 @@ def trim_op(base: Op, start: float, end: float, fast: bool,
         steps.append(_ff("-f", "concat", "-safe", "0", "-i", str(lst),
                          "-c", "copy", str(ctx.out)))
         return steps
-    return derive(base, build, suffix="-sem-trecho" if remove else "-cortado")
+    return derive(base, build, suffix=" Cut" if remove else " Trimmed")
 
 
 def video_size_op(base: Op, target_mb: float, height: int, mute: bool) -> Op:
@@ -213,7 +224,7 @@ def video_size_op(base: Op, target_mb: float, height: int, mute: bool) -> Op:
             if proc.returncode != 0:
                 raise RuntimeError(proc.stderr.strip()[-400:] or "ffmpeg falhou")
         return [run]
-    tag = f"-{target_mb:g}mb" if target_mb else "-comprimido"
+    tag = f" {target_mb:g}MB" if target_mb else " Compressed"
     return derive(base, build, ext="mp4", suffix=tag)
 
 
@@ -258,13 +269,15 @@ def pdf_pages_op(base: Op, action: str, pages: list[int], total: int) -> Op:
                          f"--rotate=+90:{_ranges(pages)}"]]
         return [q + ["--empty", "--pages", str(ctx.src), _ranges(keep), "--",
                      str(ctx.out)]]
-    suffix = {"extract": "-p" + _ranges(pages).replace(",", "_"),
-              "delete": "-editado",
-              "rotate": "-girado"}[action]
+    label = "Page" if len(pages) == 1 else "Pages"
+    suffix = {"extract": f" {label} " + _ranges(pages).replace(",", " "),
+              "delete": " Edited",
+              "rotate": " Rotated"}[action]
     return derive(base, build, suffix=suffix)
 
 
 __all__ = ["ImageEdit", "image_edit_op", "image_size", "trim_op",
+           "add_background_op",
            "keyframe_before",
            "video_size_op", "pdf_pages_op", "page_count", "duration",
            "derive", "ALL", "EACH"]

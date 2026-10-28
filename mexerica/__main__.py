@@ -99,6 +99,7 @@ def cmd_doctor(_args) -> int:
         ("exiftool", "metadados"), ("zbarimg", "ler QR code (zbar)"),
         ("bsdtar", "ZIP/7Z/TAR/RAR (libarchive)"),
         ("wl-copy", "clipboard sem a extensão (wl-clipboard)"),
+        ("rembg", "remover fundo de fotos com IA (opcional)"),
     ]
     for name, what in progs:
         found = T.resolve(name)
