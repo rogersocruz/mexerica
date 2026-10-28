@@ -39,10 +39,15 @@ Pendências:
 
 ## 5. Configurações e atalhos
 
-- [ ] Página de configurações.
+- [x] Janela de Configurações (`settings_window.py`, no lugar da antiga
+      "está rodando"): estilo com prévia da roda, tamanho, escurecimento,
+      opacidade, animações, itens de cada roda, pasta de saída, qualidade do
+      JPG, avisos e iniciar com o sistema. Vale na hora (`settings.py`).
+- [x] Ícone enquanto roda: bandeja do Windows e barra superior do GNOME.
 - [ ] Editar os atalhos (keybindings): a tecla de cada roda (hoje Shift,
-      Shift+Alt e Shift+Ctrl).
-- [ ] Qualidade padrão e pasta de saída.
+      Shift+Alt e Shift+Ctrl). Precisa da extensão do GNOME ler a escolha,
+      como já lê o escurecimento.
+- [ ] Publicar `docs/wiki` na aba Wiki do GitHub.
 
 ## 6. Abrir no VS Code
 

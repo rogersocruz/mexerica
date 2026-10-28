@@ -11,6 +11,10 @@ trabalho e diálogos. Foi feito para **GNOME Shell 45–51 em Wayland** e
 **Windows 11** (Explorer, área de trabalho e diálogos de arquivo). A roda,
 as janelas e as operações são as mesmas nos dois.
 
+📖 **Documentação completa na [wiki](docs/wiki/Home.md)**: instalação,
+todas as operações, janelas de edição, configurações, solução de problemas
+e como funciona por dentro.
+
 ## Atalhos
 
 | Gesto (durante o arraste)  | Roda                                                   |
@@ -99,8 +103,17 @@ Continuam disponíveis em `mexerica run`. `mexerica run img-crop foto.jpg`
 abre a janela pelo serviço que já está rodando.
 
 **Ações (Shift + Ctrl):** copiar caminho, abrir terminal na pasta, copiar
-para…, mover para…, **flutuar** (uma janelinha sempre visível de onde você
-arrasta o arquivo depois) e ZIP de tudo.
+para…, mover para…, **flutuar** e ZIP de tudo. Flutuar guarda os arquivos
+numa bolha redonda sempre visível, com o ícone que o sistema mostra para o
+arquivo (miniatura, ou o ícone do programa), o nome embaixo e o × às 3
+horas; arrastar a bolha leva os arquivos, arrastar o nome a move.
+
+**Configurações** (menu de apps / Iniciar, ou o ícone da Mexerica na bandeja
+do Windows / na barra superior do GNOME, que fica à vista enquanto ela roda):
+estilo (5 paletas, com prévia da roda), tamanho da roda, escurecimento do
+fundo, opacidade das janelas, animações, quais itens aparecem em cada roda,
+pasta de saída, qualidade do JPG, avisos e iniciar com o sistema. Tudo vale
+na hora. Detalhes na [wiki](docs/wiki/Configuracoes.md).
 
 **Regras que valem para todas as operações**
 - O resultado ganha um sufixo em inglês, que se encadeia:
@@ -109,7 +122,8 @@ arrasta o arquivo depois) e ZIP de tudo.
 - Nunca sobrescreve um arquivo: se o nome já existe, vira `foto (2).jpg`.
 - Grava primeiro num temporário oculto e só move para o nome final quando
   termina. Se falhar, nenhum arquivo quebrado fica para trás.
-- Se a pasta de origem for somente leitura, salva em `~/Downloads`.
+- Salva ao lado do original (ou na pasta escolhida nas Configurações). Se
+  a pasta for somente leitura, salva em `~/Downloads`.
 - Com vários arquivos, processa todos em lote.
 - Mostra uma notificação no início e no fim, com os botões *Mostrar na
   pasta* e *Abrir*. No Windows ela aparece no canto da tela, no mesmo
@@ -359,7 +373,8 @@ precisa dos tipos de entrada que aceita, dos programas que usa e de um
 1. Validar numa sessão GNOME real (multi-monitor, escala fracionária).
 2. Janela de progresso com cancelamento para jobs longos.
 3. Tarjar/borrar áreas no *Editar…*; reordenar páginas no *Páginas…*.
-4. Preferências: tecla do gesto, qualidade padrão, pasta de saída.
+4. Configurações: escolher a tecla de cada roda (o resto já está em
+   Configurações).
 5. Menu de serviço do Dolphin e Nautilus Scripts reaproveitando o motor.
 
 A lista detalhada está em [TODO.md](TODO.md).
