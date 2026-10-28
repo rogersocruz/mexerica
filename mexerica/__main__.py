@@ -90,11 +90,14 @@ def _open_editor(op_id: str, files: list[str]) -> int:
 
 
 def cmd_doctor(_args) -> int:
+    from .engine import office
     from .engine import tools as T
     progs = [
         ("ffmpeg", "vídeo e áudio"), ("ffprobe", "duração/tamanho alvo"),
         ("magick", "imagens (ImageMagick)"), ("montage", "colagem"),
-        ("soffice", "documentos (LibreOffice)"), ("pandoc", "Markdown/EPUB"),
+        ("soffice", "documentos (LibreOffice, opcional)"),
+        ("pandoc", "Markdown/EPUB e documentos sem Office"),
+        ("typst", "PDF pelo pandoc, sem Office"),
         ("pdftoppm", "PDF → imagens (poppler)"), ("pdftotext", "PDF → texto"),
         ("pdfimages", "extrair imagens de PDF"), ("qpdf", "juntar/dividir PDF"),
         ("gs", "comprimir PDF (Ghostscript)"),
@@ -112,6 +115,19 @@ def cmd_doctor(_args) -> int:
     fmts = T.magick_writable()
     extra = [f for f in ("heic", "avif", "webp", "jxl", "pdf") if f in fmts]
     print(f"\nImageMagick escreve: {', '.join(extra) or 'nenhum extra'}")
+    if WINDOWS:
+        apps = [name for family, name in ((office.TEXT, "Word"),
+                                          (office.SHEET, "Excel"),
+                                          (office.SLIDES, "PowerPoint"))
+                if office.ms_office(family)]
+        print("Microsoft Office: " + (", ".join(apps) or "ausente"))
+    who = {office.MS: "Microsoft Office", office.LO: "LibreOffice",
+           office.PANDOC: "pandoc + typst (só o conteúdo, sem layout)"}
+    for family, label, src in ((office.TEXT, "Textos", "docx"),
+                               (office.SHEET, "Planilhas", "xlsx"),
+                               (office.SLIDES, "Apresentações", "pptx")):
+        backend = office.route(family, src, "pdf")
+        print(f"{label} → PDF: {who.get(backend, 'ninguém')}")
     if WINDOWS:
         print("Para instalar o que falta: .\\install.ps1 -Converters "
               "(LibreOffice: -Office)")

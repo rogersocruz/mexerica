@@ -18,12 +18,15 @@
 
 .PARAMETER Converters
   Instala também os conversores: ffmpeg, ImageMagick, libheif, librsvg,
-  poppler, qpdf, Ghostscript, zbar e libarchive pelo MSYS2; Pandoc e
-  ExifTool pelo winget. Sem isso, a roda mostra só o que já existir.
+  poppler, qpdf, Ghostscript, zbar, libarchive e typst pelo MSYS2; Pandoc
+  e ExifTool pelo winget. Sem isso, a roda mostra só o que já existir.
 
 .PARAMETER Office
-  Instala o LibreOffice (winget, ~350 MB). Só ele converte DOCX, ODT, RTF,
-  PPTX e XLSX (e Markdown/EPUB para PDF).
+  Instala o LibreOffice (winget, ~350 MB). Em geral não precisa: os
+  documentos do Office são convertidos pelo Microsoft Office instalado
+  (Word, Excel, PowerPoint) ou, sem ele, pelo pandoc + typst. O LibreOffice
+  só acrescenta Pages, Keynote, Numbers e WordPerfect, e o layout fiel de
+  planilhas e apresentações numa máquina sem Microsoft Office.
 
 .PARAMETER AppOnly
   Só copia o código para %LOCALAPPDATA%\Mexerica e reinicia o serviço,
@@ -190,7 +193,7 @@ if (-not $AppOnly) {
     if ($Converters) {
         # um por vez: se algum faltar no repositório, os outros entram
         foreach ($name in 'ffmpeg', 'imagemagick', 'libheif', 'librsvg', 'poppler',
-                          'qpdf', 'ghostscript', 'zbar', 'libarchive') {
+                          'qpdf', 'ghostscript', 'zbar', 'libarchive', 'typst') {
             if (-not (Invoke-Pacman @('-S', '--needed', '--noconfirm', ($Pkg + $name)))) {
                 Write-Warning "pacman: $name não foi instalado"
             }

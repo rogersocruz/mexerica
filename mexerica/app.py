@@ -36,6 +36,7 @@ from . import APP_ID, __version__, cache_dir  # noqa: E402
 from . import desktop  # noqa: E402
 from . import theme as TH  # noqa: E402
 from .engine import ACTIONS, CONVERT, TOOLS, options_for, run  # noqa: E402
+from .engine import office  # noqa: E402
 from .engine import tools as T  # noqa: E402
 from .engine.ops import ACTION, EDITOR, TEXT, Op  # noqa: E402
 from .engine import BY_ID  # noqa: E402
@@ -664,10 +665,11 @@ class MexericaApp(Gtk.Application):
             "",
             self.desktop.status(),
         ]
-        missing = [n for n in ("ffmpeg", "magick", "soffice", "pandoc",
-                               "qpdf", "gs", "exiftool", "zbarimg",
-                               "bsdtar", "pdftoppm")
+        missing = [n for n in ("ffmpeg", "magick", "pandoc", "qpdf", "gs",
+                               "exiftool", "zbarimg", "bsdtar", "pdftoppm")
                    if not T.has(n)]
+        if not office.any_office():
+            missing.append("Office (Microsoft Office, LibreOffice ou typst)")
         if missing:
             lines.append("Programas ausentes (as opções somem da roda): "
                          + ", ".join(missing))

@@ -245,10 +245,13 @@ def test_archives(d):
     assert allzip.suffix == ".zip"
 
 
-@need("soffice")
+@pytest.mark.skipif(not BY_ID["to-pdf-text"].is_available(),
+                    reason="sem Office, LibreOffice nem pandoc + typst")
 def test_office(d):
+    """TXT para PDF por quem houver (Microsoft Office, LibreOffice ou typst);
+    tests/test_office.py cobre cada um."""
     doc = d / "carta.txt"
-    doc.write_text("Olá, mundo\n")
+    doc.write_text("Olá, mundo\n", encoding="utf-8")
     out = _one(run(BY_ID["to-pdf-text"], [doc]))
     assert out.read_bytes()[:4] == b"%PDF"
 
