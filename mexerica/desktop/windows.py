@@ -39,6 +39,14 @@ TOAST_MARGIN = 16          # px físicos, da borda da área útil
 TOAST_GAP = 10
 
 
+def _app_alias(name: str) -> str | None:
+    """Apps da Microsoft Store (wt, winget) são aliases em WindowsApps,
+    pasta que nem sempre está no PATH."""
+    alias = Path(os.environ.get("LOCALAPPDATA", ""), "Microsoft",
+                 "WindowsApps", f"{name}.exe")
+    return shutil.which(name) or (str(alias) if alias.exists() else None)
+
+
 class WindowsDesktop:
     name = "Windows"
     overlay_dim = OVERLAY_DIM   # sem a extensão, a própria roda escurece
@@ -166,10 +174,11 @@ class WindowsDesktop:
         W.allow_foreground()
         d = str(folder)
         term = os.environ.get("TERMINAL")
+        wt = _app_alias("wt")                        # Windows Terminal
         if term and shutil.which(term):
             subprocess.Popen([term], cwd=d)
-        elif shutil.which("wt"):                     # Windows Terminal
-            subprocess.Popen(["wt", "-d", "."], cwd=d)
+        elif wt:
+            subprocess.Popen([wt, "-d", "."], cwd=d)
         else:
             shell = shutil.which("pwsh") or shutil.which("powershell") \
                 or "cmd.exe"

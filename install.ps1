@@ -39,6 +39,16 @@ function Invoke-Pacman([string[]]$Arguments) {
     return ($LASTEXITCODE -eq 0)
 }
 
+function Find-Winget {
+    $cmd = Get-Command winget -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    # o winget é um alias em WindowsApps, que nem sempre está no PATH
+    $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\winget.exe'
+    if (Test-Path $alias) { return $alias }
+    return $null
+}
+$Winget = Find-Winget
+
 function Stop-Mexerica {
     Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe' OR Name = 'python.exe'" |
         Where-Object { $_.CommandLine -match '-m mexerica( daemon)?\s*$' } |
@@ -59,11 +69,11 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wP
 
 # --- MSYS2 ------------------------------------------------------------------
 if (-not (Test-Path (Join-Path $Msys 'usr\bin\bash.exe'))) {
-    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        throw "MSYS2 não encontrado em $Msys. Instale de https://www.msys2.org e rode de novo."
+    if (-not $Winget) {
+        throw "MSYS2 não encontrado em $Msys e winget indisponível. Instale de https://www.msys2.org e rode de novo."
     }
     Write-Host 'Instalando o MSYS2 (winget)...'
-    winget install --id MSYS2.MSYS2 -e --accept-package-agreements --accept-source-agreements
+    & $Winget install --id MSYS2.MSYS2 -e --accept-package-agreements --accept-source-agreements
     if (-not (Test-Path (Join-Path $Msys 'usr\bin\bash.exe'))) {
         throw "MSYS2 não ficou em $Msys. Defina MSYS2_ROOT se instalou em outro lugar."
     }
@@ -88,10 +98,10 @@ if ($Converters) {
             Write-Warning "pacman: $name não foi instalado"
         }
     }
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
+    if ($Winget) {
         foreach ($id in 'JohnMacFarlane.Pandoc', 'OliverBetz.ExifTool',
                         'TheDocumentFoundation.LibreOffice') {
-            winget install --id $id -e --accept-package-agreements --accept-source-agreements
+            & $Winget install --id $id -e --accept-package-agreements --accept-source-agreements
         }
     } else {
         Write-Warning 'winget não encontrado: instale Pandoc, ExifTool e LibreOffice à mão.'
