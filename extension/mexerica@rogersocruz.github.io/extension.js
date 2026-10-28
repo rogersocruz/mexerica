@@ -9,7 +9,9 @@
 //   4. colocar a janela da roda acima de todas as outras;
 //   5. escrever no clipboard em nome do serviço;
 //   6. borrar o que está atrás das janelas do serviço (efeito de vidro):
-//      um app não enxerga o que está atrás dele, o compositor sim.
+//      um app não enxerga o que está atrás dele, o compositor sim;
+//   7. mostrar um ícone na barra superior enquanto o serviço roda
+//      (Configurações e Sair), o equivalente da bandeja do Windows.
 // A roda em si é desenhada pelo serviço GTK (mexerica), que recebe o drop.
 
 import Clutter from 'gi://Clutter';
@@ -21,11 +23,14 @@ import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 const APP_ID = 'io.github.rogersocruz.Mexerica';
 const APP_PATH = '/io/github/rogersocruz/Mexerica';
 const OVERLAY_TITLE = 'mexerica-overlay';
-const FLOAT_PREFIX = 'Mexerica — ';
+const FLOAT_PREFIX = 'Mexerica — ';                 // fica acima das outras
+const ROUND_PREFIX = 'Mexerica — Flutuar · ';       // redonda: sem vidro atrás
 
 const POLL_MS = 30;               // leitura dos modificadores durante o arraste
 const RELEASE_GRACE_MS = 150;     // soltar Shift por menos que isso não fecha
@@ -35,7 +40,7 @@ const END_HIDE_DELAY_MS = 400;    // dá tempo do serviço processar o drop
 // escura. Janelas (editores, Flutuar): o fundo atrás delas fica fosco.
 const BLUR_EFFECT = 'mexerica-blur';
 const OVERLAY_BLUR_RADIUS = 28;
-const OVERLAY_BLUR_BRIGHTNESS = 0.72;
+const OVERLAY_DIM = 28;           // % padrão; o usuário muda nas Configurações
 const WINDOW_BLUR_RADIUS = 36;
 const WINDOW_BLUR_BRIGHTNESS = 0.92;
 const BLUR_FADE_MS = 160;
@@ -58,6 +63,23 @@ function modeFor(mods) {
     if (mods & Clutter.ModifierType.CONTROL_MASK)
         return 'actions';
     return 'convert';
+}
+
+// Configurações do serviço (~/.config/mexerica/settings.json); daqui só sai
+// o quanto a tela escurece atrás da roda.
+function overlayBrightness() {
+    let dim = OVERLAY_DIM;
+    try {
+        const file = GLib.build_filenamev([GLib.get_user_config_dir(),
+            'mexerica', 'settings.json']);
+        const [, bytes] = GLib.file_get_contents(file);
+        const value = JSON.parse(new TextDecoder().decode(bytes)).dim;
+        if (Number.isFinite(value))
+            dim = Math.min(Math.max(value, 0), 90);
+    } catch {
+        // sem arquivo ou ilegível: o padrão
+    }
+    return 1 - dim / 100;
 }
 
 function isOurs(win) {
@@ -92,6 +114,12 @@ export default class MexericaExtension extends Extension {
 
         this._dbus = Gio.DBusExportedObject.wrapJSObject(SHELL_IFACE, this);
         this._dbus.export(Gio.DBus.session, APP_PATH);
+
+        // ícone na barra superior só enquanto o serviço está no barramento
+        this._indicator = null;
+        this._watchId = Gio.bus_watch_name(Gio.BusType.SESSION, APP_ID,
+            Gio.BusNameWatcherFlags.NONE,
+            () => this._showIndicator(), () => this._hideIndicator());
     }
 
     disable() {
@@ -118,6 +146,37 @@ export default class MexericaExtension extends Extension {
             actor.remove_effect_by_name(BLUR_EFFECT);
         this._dbus?.unexport();
         this._dbus = null;
+        if (this._watchId)
+            Gio.bus_unwatch_name(this._watchId);
+        this._watchId = 0;
+        this._hideIndicator();
+    }
+
+    // ---- ícone na barra superior ----------------------------------------
+    _showIndicator() {
+        if (this._indicator)
+            return;
+        const button = new PanelMenu.Button(0.0, 'Mexerica', false);
+        button.add_child(new St.Icon({
+            gicon: Gio.ThemedIcon.new(APP_ID),
+            style_class: 'system-status-icon',
+        }));
+        const item = (label, action) => {
+            const entry = new PopupMenu.PopupMenuItem(label);
+            entry.connect('activate', () => this._callApp(action, null));
+            button.menu.addMenuItem(entry);
+        };
+        item('Configurações…', 'settings');
+        item('Abrir o log', 'open-log');
+        button.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        item('Sair da Mexerica', 'quit');
+        Main.panel.addToStatusArea(this.uuid, button);
+        this._indicator = button;
+    }
+
+    _hideIndicator() {
+        this._indicator?.destroy();
+        this._indicator = null;
     }
 
     // ---- D-Bus exportado para o serviço -------------------------------
@@ -310,7 +369,8 @@ export default class MexericaExtension extends Extension {
             if (title.startsWith(FLOAT_PREFIX) && !win.is_above())
                 win.make_above();
             Main.activateWindow(win);
-            this._blurWindow(win);
+            if (!title.startsWith(ROUND_PREFIX))
+                this._blurWindow(win);
         }
         return true;
     }
@@ -348,7 +408,7 @@ export default class MexericaExtension extends Extension {
             actor.ease_property(`@effects.${BLUR_EFFECT}.radius`,
                 OVERLAY_BLUR_RADIUS, ease);
             actor.ease_property(`@effects.${BLUR_EFFECT}.brightness`,
-                OVERLAY_BLUR_BRIGHTNESS, ease);
+                overlayBrightness(), ease);
         });
     }
 

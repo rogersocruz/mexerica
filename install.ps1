@@ -135,9 +135,28 @@ function Invoke-Pacman([string[]]$Arguments) {
 }
 
 function Stop-Mexerica {
-    Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe' OR Name = 'python.exe'" |
-        Where-Object { $_.CommandLine -match '-m mexerica( daemon)?\s*$' } |
-        ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
+    # Pede para sair pela janela da bandeja (o ícone some direito); quem não
+    # sair em 3 s é encerrado.
+    if (-not ('Mexerica.Tray' -as [type])) {
+        Add-Type -Namespace Mexerica -Name Tray -MemberDefinition @'
+[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
+[DllImport("user32.dll")]
+public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr w, IntPtr l);
+'@
+    }
+    $hwnd = [IntPtr]::Zero
+    while (($hwnd = [Mexerica.Tray]::FindWindowEx([IntPtr]::Zero, $hwnd, 'MexericaTray', $null)) -ne [IntPtr]::Zero) {
+        [Mexerica.Tray]::PostMessage($hwnd, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+    }
+    $deadline = (Get-Date).AddSeconds(3)
+    do {
+        $left = @(Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe' OR Name = 'python.exe'" |
+            Where-Object { $_.CommandLine -match '-m mexerica( daemon)?\s*$' })
+        if (-not $left) { return }
+        Start-Sleep -Milliseconds 300
+    } while ((Get-Date) -lt $deadline)
+    $left | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
 }
 
 function Send-SettingChange {
@@ -254,8 +273,12 @@ function New-Shortcut([string]$Path, [string]$Arguments, [string]$Description) {
 }
 New-Shortcut (Join-Path ([Environment]::GetFolderPath('Programs')) 'Mexerica.lnk') `
     '-X utf8 -m mexerica' 'Converta arquivos segurando Shift enquanto arrasta'
-New-Shortcut (Join-Path ([Environment]::GetFolderPath('Startup')) 'Mexerica (serviço).lnk') `
-    '-X utf8 -m mexerica daemon' 'Mantém a roda de conversão pronta para abrir sem atraso'
+# desligado em Configurações > Comportamento: o atalho fica guardado fora da
+# pasta Inicializar e continua desligado
+$startupLink = Join-Path ([Environment]::GetFolderPath('Startup')) 'Mexerica (serviço).lnk'
+$parkedLink = Join-Path $Root 'autostart-off.lnk'
+if (Test-Path $parkedLink) { $startupLink = $parkedLink }
+New-Shortcut $startupLink '-X utf8 -m mexerica daemon' 'Mantém a roda de conversão pronta para abrir sem atraso'
 
 # Alt+Shift e Ctrl+Shift trocam o teclado: são as teclas das rodas
 if (-not $KeepLayoutHotkeys) {
@@ -270,8 +293,9 @@ $env:PYTHONPATH = $App
 & $Py -X utf8 -m mexerica doctor
 Write-Host @"
 
-Instalado e rodando. Arraste um arquivo no Explorer e segure Shift
-(Shift+Alt: ferramentas, Shift+Ctrl: ações). O serviço sobe sozinho no login.
+Instalado e rodando (ícone da Mexerica perto do relógio). Arraste um arquivo
+no Explorer e segure Shift (Shift+Alt: ferramentas, Shift+Ctrl: ações).
+Configurações: clique no ícone da bandeja ou abra "Mexerica" no menu Iniciar.
 
 O comando mexerica vale nos terminais abertos a partir de agora.
 Log: $Root\cache\mexerica.log

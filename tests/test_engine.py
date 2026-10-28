@@ -228,6 +228,19 @@ def test_strip_and_show_meta(png, pdf):
     _one(run(BY_ID["strip-meta"], [pdf]))
 
 
+@need("exiftool")
+def test_meta_with_accented_name(png):
+    """No Windows o exiftool lia nomes com acento em ANSI: a saída vinha em
+    cp1252 e a operação quebrava ("Informática.xlsx")."""
+    src = png.with_name("Inventário de Informática.png")
+    shutil.copy(png, src)
+    shown = run(BY_ID["show-meta"], [src])
+    assert shown.ok and "Inventário de Informática.png" in shown.texts[0]
+    assert "ImageWidth" in shown.texts[0]
+    clean = _one(run(BY_ID["strip-meta"], [src]))
+    assert clean.name == "Inventário de Informática Without Metadata.png"
+
+
 @need("bsdtar")
 def test_archives(d):
     png = d / "foto.png"

@@ -43,7 +43,64 @@ class WINCOMPATTRDATA(ctypes.Structure):
                 ("SizeOfData", ctypes.c_size_t)]
 
 
+class GUID(ctypes.Structure):
+    _fields_ = [("Data1", W.DWORD), ("Data2", W.WORD), ("Data3", W.WORD),
+                ("Data4", ctypes.c_ubyte * 8)]
+
+
+IID_IDataObject = GUID(0x0000010E, 0, 0,
+                       (ctypes.c_ubyte * 8)(0xC0, 0, 0, 0, 0, 0, 0, 0x46))
+IID_IShellItemImageFactory = GUID(
+    0xBCC18B79, 0xBA16, 0x442F,
+    (ctypes.c_ubyte * 8)(0x80, 0xC4, 0x8A, 0x59, 0xC3, 0x0C, 0x46, 0x3B))
+
 WNDENUMPROC = ctypes.WINFUNCTYPE(W.BOOL, W.HWND, W.LPARAM)
+WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, W.HWND, W.UINT, W.WPARAM,
+                             W.LPARAM)
+
+
+class WNDCLASSW(ctypes.Structure):
+    _fields_ = [("style", W.UINT), ("lpfnWndProc", WNDPROC),
+                ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int),
+                ("hInstance", W.HINSTANCE), ("hIcon", W.HICON),
+                ("hCursor", W.HANDLE), ("hbrBackground", W.HBRUSH),
+                ("lpszMenuName", W.LPCWSTR), ("lpszClassName", W.LPCWSTR)]
+
+
+class NOTIFYICONDATAW(ctypes.Structure):
+    _fields_ = [("cbSize", W.DWORD), ("hWnd", W.HWND), ("uID", W.UINT),
+                ("uFlags", W.UINT), ("uCallbackMessage", W.UINT),
+                ("hIcon", W.HICON), ("szTip", W.WCHAR * 128),
+                ("dwState", W.DWORD), ("dwStateMask", W.DWORD),
+                ("szInfo", W.WCHAR * 256), ("uVersion", W.UINT),
+                ("szInfoTitle", W.WCHAR * 64), ("dwInfoFlags", W.DWORD),
+                ("guidItem", GUID), ("hBalloonIcon", W.HICON)]
+
+
+class SIZE(ctypes.Structure):
+    _fields_ = [("cx", ctypes.c_long), ("cy", ctypes.c_long)]
+
+
+class BITMAP(ctypes.Structure):
+    _fields_ = [("bmType", ctypes.c_long), ("bmWidth", ctypes.c_long),
+                ("bmHeight", ctypes.c_long), ("bmWidthBytes", ctypes.c_long),
+                ("bmPlanes", W.WORD), ("bmBitsPixel", W.WORD),
+                ("bmBits", ctypes.c_void_p)]
+
+
+class BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [("biSize", W.DWORD), ("biWidth", ctypes.c_long),
+                ("biHeight", ctypes.c_long), ("biPlanes", W.WORD),
+                ("biBitCount", W.WORD), ("biCompression", W.DWORD),
+                ("biSizeImage", W.DWORD), ("biXPelsPerMeter", ctypes.c_long),
+                ("biYPelsPerMeter", ctypes.c_long), ("biClrUsed", W.DWORD),
+                ("biClrImportant", W.DWORD)]
+
+
+class SHFILEINFOW(ctypes.Structure):
+    _fields_ = [("hIcon", W.HICON), ("iIcon", ctypes.c_int),
+                ("dwAttributes", W.DWORD), ("szDisplayName", W.WCHAR * 260),
+                ("szTypeName", W.WCHAR * 80)]
 
 GetAsyncKeyState = _fn(user32, "GetAsyncKeyState", ctypes.c_short, ctypes.c_int)
 GetSystemMetrics = _fn(user32, "GetSystemMetrics", ctypes.c_int, ctypes.c_int)
@@ -102,6 +159,63 @@ ILFree = _fn(shell32, "ILFree", None, ctypes.c_void_p)
 SHOpenFolderAndSelectItems = _fn(shell32, "SHOpenFolderAndSelectItems",
                                  ctypes.c_long, ctypes.c_void_p, W.UINT,
                                  ctypes.POINTER(ctypes.c_void_p), W.DWORD)
+ILFindLastID = _fn(shell32, "ILFindLastID", ctypes.c_void_p, ctypes.c_void_p)
+OleInitialize = _fn(ole32, "OleInitialize", ctypes.c_long, ctypes.c_void_p)
+SHCreateDataObject = _fn(shell32, "SHCreateDataObject", ctypes.c_long,
+                         ctypes.c_void_p, W.UINT,
+                         ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p,
+                         ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))
+SHDoDragDrop = _fn(shell32, "SHDoDragDrop", ctypes.c_long, W.HWND,
+                   ctypes.c_void_p, ctypes.c_void_p, W.DWORD,
+                   ctypes.POINTER(W.DWORD))
+SHCreateItemFromParsingName = _fn(shell32, "SHCreateItemFromParsingName",
+                                  ctypes.c_long, W.LPCWSTR, ctypes.c_void_p,
+                                  ctypes.POINTER(GUID),
+                                  ctypes.POINTER(ctypes.c_void_p))
+SHGetFileInfoW = _fn(shell32, "SHGetFileInfoW", ctypes.c_size_t, W.LPCWSTR,
+                     W.DWORD, ctypes.POINTER(SHFILEINFOW), W.UINT, W.UINT)
+Shell_NotifyIconW = _fn(shell32, "Shell_NotifyIconW", W.BOOL, W.DWORD,
+                        ctypes.POINTER(NOTIFYICONDATAW))
+gdi32 = ctypes.WinDLL("gdi32")
+GetObjectW = _fn(gdi32, "GetObjectW", ctypes.c_int, W.HANDLE, ctypes.c_int,
+                 ctypes.c_void_p)
+GetDIBits = _fn(gdi32, "GetDIBits", ctypes.c_int, W.HDC, W.HBITMAP, W.UINT,
+                W.UINT, ctypes.c_void_p, ctypes.POINTER(BITMAPINFOHEADER),
+                W.UINT)
+DeleteObject = _fn(gdi32, "DeleteObject", W.BOOL, W.HANDLE)
+GetDC = _fn(user32, "GetDC", W.HDC, W.HWND)
+ReleaseDC = _fn(user32, "ReleaseDC", ctypes.c_int, W.HWND, W.HDC)
+GetModuleHandleW = _fn(kernel32, "GetModuleHandleW", W.HMODULE, W.LPCWSTR)
+RegisterClassW = _fn(user32, "RegisterClassW", W.ATOM,
+                     ctypes.POINTER(WNDCLASSW))
+CreateWindowExW = _fn(user32, "CreateWindowExW", W.HWND, W.DWORD, W.LPCWSTR,
+                      W.LPCWSTR, W.DWORD, ctypes.c_int, ctypes.c_int,
+                      ctypes.c_int, ctypes.c_int, W.HWND, W.HMENU,
+                      W.HINSTANCE, ctypes.c_void_p)
+DestroyWindow = _fn(user32, "DestroyWindow", W.BOOL, W.HWND)
+DefWindowProcW = _fn(user32, "DefWindowProcW", ctypes.c_ssize_t, W.HWND,
+                     W.UINT, W.WPARAM, W.LPARAM)
+RegisterWindowMessageW = _fn(user32, "RegisterWindowMessageW", W.UINT,
+                             W.LPCWSTR)
+LoadImageW = _fn(user32, "LoadImageW", W.HANDLE, W.HINSTANCE, W.LPCWSTR,
+                 W.UINT, ctypes.c_int, ctypes.c_int, W.UINT)
+DestroyIcon = _fn(user32, "DestroyIcon", W.BOOL, W.HICON)
+CreatePopupMenu = _fn(user32, "CreatePopupMenu", W.HMENU)
+AppendMenuW = _fn(user32, "AppendMenuW", W.BOOL, W.HMENU, W.UINT,
+                  ctypes.c_size_t, W.LPCWSTR)
+TrackPopupMenu = _fn(user32, "TrackPopupMenu", ctypes.c_int, W.HMENU, W.UINT,
+                     ctypes.c_int, ctypes.c_int, ctypes.c_int, W.HWND,
+                     ctypes.c_void_p)
+DestroyMenu = _fn(user32, "DestroyMenu", W.BOOL, W.HMENU)
+PostMessageW = _fn(user32, "PostMessageW", W.BOOL, W.HWND, W.UINT, W.WPARAM,
+                   W.LPARAM)
+SHGetKnownFolderPath = _fn(shell32, "SHGetKnownFolderPath", ctypes.c_long,
+                           ctypes.POINTER(GUID), W.DWORD, W.HANDLE,
+                           ctypes.POINTER(ctypes.c_wchar_p))
+CoTaskMemFree = _fn(ole32, "CoTaskMemFree", None, ctypes.c_void_p)
+FOLDERID_Startup = GUID(0xB97D20BB, 0xF46A, 0x4C97,
+                        (ctypes.c_ubyte * 8)(0xBA, 0x10, 0x5E, 0x36, 0x08, 0x43,
+                                             0x08, 0x54))
 
 VK_LBUTTON, VK_RBUTTON = 0x01, 0x02
 VK_SHIFT, VK_CONTROL, VK_MENU = 0x10, 0x11, 0x12
@@ -125,6 +239,17 @@ CF_UNICODETEXT = 13
 GMEM_MOVEABLE = 0x2
 COINIT_APARTMENTTHREADED = 0x2
 ERROR_ALREADY_EXISTS = 183
+DROPEFFECT_COPY, DROPEFFECT_MOVE = 1, 2
+WM_NULL, WM_CLOSE, WM_CONTEXTMENU = 0x0000, 0x0010, 0x007B
+WM_LBUTTONUP, WM_RBUTTONUP, WM_APP = 0x0202, 0x0205, 0x8000
+NIM_ADD, NIM_DELETE = 0, 2
+NIF_MESSAGE, NIF_ICON, NIF_TIP = 0x1, 0x2, 0x4
+IMAGE_ICON, LR_LOADFROMFILE = 1, 0x10
+SM_CXSMICON, SM_CYSMICON = 49, 50
+MF_STRING, MF_SEPARATOR = 0x0, 0x800
+TPM_RIGHTBUTTON, TPM_RETURNCMD = 0x2, 0x100
+SHGFI_DISPLAYNAME = 0x200
+TRAY_CLASS = "MexericaTray"         # o instalador acha a janela por aqui
 
 # Janela da imagem que acompanha o ponteiro num arraste do shell (Explorer,
 # área de trabalho, diálogos de arquivo). Só existe durante um arraste.
@@ -315,6 +440,13 @@ def set_glass(hwnd: int, rounded: bool) -> None:
               DWMWCP_ROUND if rounded else DWMWCP_DONOTROUND)
     _dwm_uint(hwnd, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE)
 
+
+def plain_frame(hwnd: int) -> None:
+    """Sem cantos nem borda do DWM: a janela desenha a própria forma (a
+    bolha da Flutuar)."""
+    _dwm_uint(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND)
+    _dwm_uint(hwnd, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE)
+
 # --------------------------------------------------------------------------
 # Foco
 # --------------------------------------------------------------------------
@@ -367,6 +499,203 @@ def set_clipboard(text: str) -> bool:
         return True
     finally:
         CloseClipboard()
+
+
+def com_release(ptr: int) -> None:
+    """IUnknown::Release (terceira entrada da vtable)."""
+    vtbl = ctypes.cast(ptr, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))
+    ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtbl.contents[2])(ptr)
+
+
+_DESKTOP = (ctypes.c_ubyte * 2)()      # IDLIST vazia: a raiz do shell
+
+
+def file_data_object(paths: list[Path]) -> int:
+    """IDataObject do shell para os arquivos, o mesmo que o Explorer arrasta
+    (CF_HDROP, lista de itens e miniatura). Quem chama faz o com_release."""
+    pidls = [ILCreateFromPathW(str(p)) for p in paths]
+    parents = {str(Path(p).parent).lower() for p in paths}
+    # mesma pasta: pasta + itens dela; pastas diferentes: tudo a partir da raiz
+    folder = ILCreateFromPathW(str(Path(paths[0]).parent)) \
+        if len(parents) == 1 else None
+    try:
+        if not all(pidls) or (len(parents) == 1 and not folder):
+            raise OSError("caminho fora do shell: " + str(paths[0]))
+        items = [ILFindLastID(p) for p in pidls] if folder else pidls
+        arr = (ctypes.c_void_p * len(items))(*items)
+        obj = ctypes.c_void_p()
+        hr = SHCreateDataObject(folder or ctypes.addressof(_DESKTOP),
+                                len(items), arr, None,
+                                ctypes.byref(IID_IDataObject),
+                                ctypes.byref(obj))
+        if hr < 0 or not obj.value:
+            raise OSError(f"SHCreateDataObject falhou ({hr & 0xFFFFFFFF:#x})")
+        return obj.value
+    finally:
+        for pidl in [*pidls, folder]:
+            if pidl:
+                ILFree(pidl)
+
+
+def drag_files(hwnd: int, paths: list[Path]) -> int:
+    """Arrasta os arquivos como o Explorer, a partir do botão já pressionado:
+    miniatura do Windows, a barra de tarefas traz as janelas para a frente e
+    qualquer app recebe. Bloqueia até o drop; devolve o efeito (0 se
+    cancelou)."""
+    OleInitialize(None)                 # o GTK já fez; aqui só confirma
+    obj = file_data_object(paths)
+    try:
+        effect = W.DWORD(0)
+        SHDoDragDrop(hwnd, obj, None, DROPEFFECT_COPY | DROPEFFECT_MOVE,
+                     ctypes.byref(effect))
+        return effect.value
+    finally:
+        com_release(obj)
+
+
+def shell_image(path: Path, size: int) -> tuple[int, int, bytes] | None:
+    """A imagem que o Explorer mostra para o arquivo: miniatura, se houver,
+    senão o ícone (o de um atalho ou .exe é o do programa). Devolve largura,
+    altura e pixels BGRA pré-multiplicados, de cima para baixo."""
+    CoInitializeEx(None, COINIT_APARTMENTTHREADED)
+    factory = ctypes.c_void_p()
+    if SHCreateItemFromParsingName(str(path), None,
+                                   ctypes.byref(IID_IShellItemImageFactory),
+                                   ctypes.byref(factory)) < 0:
+        return None
+    hbm = W.HBITMAP()
+    try:
+        vtbl = ctypes.cast(factory,
+                           ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))
+        get_image = ctypes.WINFUNCTYPE(
+            ctypes.c_long, ctypes.c_void_p, SIZE, ctypes.c_int,
+            ctypes.POINTER(W.HBITMAP))(vtbl.contents[3])
+        if get_image(factory, SIZE(size, size), 0, ctypes.byref(hbm)) < 0:
+            return None
+    finally:
+        com_release(factory.value)
+    if not hbm:
+        return None
+    try:
+        bm = BITMAP()
+        GetObjectW(hbm, ctypes.sizeof(bm), ctypes.byref(bm))
+        w, h = bm.bmWidth, abs(bm.bmHeight)
+        header = BITMAPINFOHEADER(biSize=ctypes.sizeof(BITMAPINFOHEADER),
+                                  biWidth=w, biHeight=-h, biPlanes=1,
+                                  biBitCount=32)
+        buf = (ctypes.c_ubyte * (w * h * 4))()
+        dc = GetDC(None)
+        try:
+            GetDIBits(dc, hbm, 0, h, buf, ctypes.byref(header), 0)
+        finally:
+            ReleaseDC(None, dc)
+        data = bytearray(buf)
+        if not any(data[3::4]):         # miniatura sem alfa (JPEG): opaca
+            data[3::4] = b"\xff" * (w * h)
+        return w, h, bytes(data)
+    finally:
+        DeleteObject(hbm)
+
+
+def startup_folder() -> Path | None:
+    """A pasta Inicializar do usuário (a política pode tê-la mudado de
+    lugar; o instalador pergunta do mesmo jeito)."""
+    out = ctypes.c_wchar_p()
+    if SHGetKnownFolderPath(ctypes.byref(FOLDERID_Startup), 0, None,
+                            ctypes.byref(out)) < 0:
+        return None
+    try:
+        return Path(out.value)
+    finally:
+        CoTaskMemFree(out)
+
+
+def display_name(path: Path) -> str:
+    """O nome como o Explorer mostra (atalho sem .lnk, extensão escondida
+    se o Explorer esconde)."""
+    info = SHFILEINFOW()
+    if SHGetFileInfoW(str(path), 0, ctypes.byref(info), ctypes.sizeof(info),
+                      SHGFI_DISPLAYNAME) and info.szDisplayName:
+        return info.szDisplayName
+    return Path(path).name
+
+
+class Tray:
+    """Ícone na área de notificação, perto do relógio. Clique abre `on_open`;
+    o botão direito abre o menu (rótulo, função; None é um separador). Vive
+    numa janela invisível da thread principal: o laço do GTK entrega as
+    mensagens dela. WM_CLOSE nessa janela (o instalador manda) chama
+    `on_close`."""
+
+    CALLBACK = WM_APP + 1
+    OPEN = WM_APP + 2       # outra instância pede para abrir (sem D-Bus)
+
+    def __init__(self, icon: Path, tip: str, on_open, menu, on_close):
+        self._on_open, self._menu, self._on_close = on_open, menu, on_close
+        # antes de criar a janela: a criação já manda mensagens ao _wndproc
+        self._recreated = RegisterWindowMessageW("TaskbarCreated")
+        self._proc = WNDPROC(self._wndproc)       # vivo enquanto a janela
+        instance = GetModuleHandleW(None)
+        RegisterClassW(ctypes.byref(WNDCLASSW(lpfnWndProc=self._proc,
+                                              hInstance=instance,
+                                              lpszClassName=TRAY_CLASS)))
+        self.hwnd = CreateWindowExW(0, TRAY_CLASS, "Mexerica", 0, 0, 0, 0, 0,
+                                    None, None, instance, None)
+        self._icon = LoadImageW(None, str(icon), IMAGE_ICON,
+                                GetSystemMetrics(SM_CXSMICON),
+                                GetSystemMetrics(SM_CYSMICON), LR_LOADFROMFILE)
+        self._data = NOTIFYICONDATAW(
+            cbSize=ctypes.sizeof(NOTIFYICONDATAW), hWnd=self.hwnd, uID=1,
+            uFlags=NIF_MESSAGE | NIF_ICON | NIF_TIP,
+            uCallbackMessage=self.CALLBACK, hIcon=self._icon, szTip=tip[:127])
+        self.shown = bool(Shell_NotifyIconW(NIM_ADD, ctypes.byref(self._data)))
+
+    def remove(self) -> None:
+        Shell_NotifyIconW(NIM_DELETE, ctypes.byref(self._data))
+        DestroyWindow(self.hwnd)
+        if self._icon:
+            DestroyIcon(self._icon)
+
+    def _wndproc(self, hwnd, msg, wparam, lparam):
+        try:
+            if msg == self.CALLBACK:
+                event = lparam & 0xFFFF
+                if event == WM_LBUTTONUP:
+                    self._on_open()
+                elif event in (WM_RBUTTONUP, WM_CONTEXTMENU):
+                    self._popup()
+                return 0
+            if msg == self.OPEN:
+                self._on_open()
+                return 0
+            if msg == self._recreated:      # o Explorer reiniciou
+                self.shown = bool(Shell_NotifyIconW(NIM_ADD,
+                                                    ctypes.byref(self._data)))
+                return 0
+            if msg == WM_CLOSE:
+                self._on_close()
+                return 0
+        except Exception:  # noqa: BLE001 - erro aqui sumiria calado
+            import logging
+            logging.getLogger("mexerica").exception("bandeja")
+        return DefWindowProcW(hwnd, msg, wparam, lparam)
+
+    def _popup(self) -> None:
+        menu = CreatePopupMenu()
+        for i, item in enumerate(self._menu, start=1):
+            if item is None:
+                AppendMenuW(menu, MF_SEPARATOR, 0, None)
+            else:
+                AppendMenuW(menu, MF_STRING, i, item[0])
+        x, y = pointer()
+        # sem isso o menu não fecha ao clicar fora (comportamento do Windows)
+        SetForegroundWindow(self.hwnd)
+        chosen = TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD, x, y,
+                                0, self.hwnd, None)
+        PostMessageW(self.hwnd, WM_NULL, 0, 0)
+        DestroyMenu(menu)
+        if chosen:
+            self._menu[chosen - 1][1]()
 
 
 def reveal(paths: list[Path]) -> bool:

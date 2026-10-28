@@ -295,6 +295,34 @@ def _core(cr, wheel: Wheel, st: WheelState) -> None:
         _show(cr, lay, cx, cy, TH.CORE_COLOR)
 
 
+def draw_disc(cr, cx: float, cy: float, r: float,
+              hover: float = 0.0) -> None:
+    """Bolha da janela Flutuar, no vidro da roda: sombra curta, disco quase
+    opaco (sem borrão atrás, para ler sobre qualquer fundo), aro e, com o
+    ponteiro em cima, um anel na cor do estilo."""
+    blur, dy = 12.0, 3.0
+    g = cairo.RadialGradient(cx, cy + dy, r - blur / 2, cx, cy + dy, r + blur)
+    g.add_color_stop_rgba(0, *TH.SHADOW[:3], TH.SHADOW[3] * 1.4)
+    g.add_color_stop_rgba(1, *TH.SHADOW[:3], 0.0)
+    cr.arc(cx, cy + dy, r + blur, 0, 2 * math.pi)
+    cr.set_source(g)
+    cr.fill()
+    fill = cairo.LinearGradient(0, cy - r, 0, cy + r)
+    fill.add_color_stop_rgba(0, *TH.SECTOR_TOP[:3], 0.94)
+    fill.add_color_stop_rgba(1, *TH.SECTOR_BOTTOM[:3], 0.90)
+    cr.arc(cx, cy, r, 0, 2 * math.pi)
+    cr.set_source(fill)
+    cr.fill_preserve()
+    cr.set_source_rgba(*TH.RIM_STROKE)
+    cr.set_line_width(TH.RIM_STROKE_W)
+    cr.stroke()
+    if hover > 0:
+        cr.arc(cx, cy, r - 2.5, 0, 2 * math.pi)
+        cr.set_source_rgba(*TH.HOVER_TOP[:3], hover)
+        cr.set_line_width(3)
+        cr.stroke()
+
+
 # --------------------------------------------------------------------------
 
 def draw(cr, wheel: Wheel, st: WheelState) -> None:

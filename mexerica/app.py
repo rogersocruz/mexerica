@@ -30,13 +30,13 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
+from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import APP_ID, __version__, cache_dir  # noqa: E402
+from . import APP_ID, __version__, cache_dir, settings  # noqa: E402
 from . import desktop  # noqa: E402
 from . import theme as TH  # noqa: E402
+from .floating import FloatWindow  # noqa: E402
 from .engine import ACTIONS, CONVERT, TOOLS, options_for, run  # noqa: E402
-from .engine import office  # noqa: E402
 from .engine import tools as T  # noqa: E402
 from .engine.ops import ACTION, EDITOR, TEXT, Op  # noqa: E402
 from .engine import BY_ID  # noqa: E402
@@ -50,14 +50,14 @@ log = logging.getLogger("mexerica")
 OVERLAY_TITLE = "mexerica-overlay"     # a extensão reconhece por este título
 IDLE_HIDE_MS = 4000      # trava de segurança: overlay sem atividade some
 
+# + TH.CSS, que muda com o estilo (apply_settings)
 CSS = """
 window.mexerica-overlay, window.mexerica-overlay > *,
 window.mexerica-overlay.background, window.mexerica-overlay decoration {
   background: none; background-color: transparent;
   box-shadow: none; border: none; outline: none;
 }
-.mexerica-float-box { padding: 10px 14px; }
-""" + TH.CSS
+"""
 
 
 def paths_from_uris(uris) -> list[Path]:
@@ -116,7 +116,8 @@ class Overlay(Gtk.Window):
         self.paths: list[Path] = []
         self.center = (0.0, 0.0)
         self.wheel: Wheel | None = None
-        self._wheel_size = (0, 0)
+        self._wheel_size = (0, 0, 1.0)
+        self._scale = 1.0
         self._anim_last = None
         self._ticking = False
         self._idle_src = 0
@@ -203,7 +204,7 @@ class Overlay(Gtk.Window):
         return GLib.SOURCE_REMOVE
 
     def _refresh_ops(self) -> None:
-        self.ops = options_for(self.paths, self.state.mode)
+        self.ops = options_for(self.paths, self.state.mode, settings.shows)
         self.state.labels = [TH.wheel_label(op) for op in self.ops]
         self.state.icons = [TH.wheel_icon(op) for op in self.ops]
         self.state.hints = [op.hint for op in self.ops]
@@ -213,14 +214,27 @@ class Overlay(Gtk.Window):
 
     # -- desenho -----------------------------------------------------------
     def _ensure_wheel(self, w: float, h: float) -> Wheel:
+        """A roda vive numa tela virtual escalada pelo tamanho escolhido nas
+        Configurações: o desenho escala, e hover e clique dividem pela
+        escala (_pick)."""
+        s = settings.wheel_scale()
         # recalcula se o tamanho mudou (o maximizar chega depois do map)
-        if self.wheel is None or self._wheel_size != (w, h):
+        if self.wheel is None or self._wheel_size != (w, h, s):
             cx, cy = self.app.desktop.wheel_center(self, w, h) or self.center
             if cx <= 0 and cy <= 0:
                 cx, cy = w / 2, h / 2
-            self.wheel = Wheel(len(self.ops), cx, cy, w or None, h or None)
-            self._wheel_size = (w, h)
+            self.wheel = Wheel(len(self.ops), cx / s, cy / s,
+                               w / s or None, h / s or None)
+            self._wheel_size = (w, h, s)
+            self._scale = s
         return self.wheel
+
+    def _pick(self, x: float, y: float) -> tuple[int | None, bool]:
+        """Setor e "no miolo" para um ponto da janela."""
+        wheel = self._ensure_wheel(self.area.get_width(),
+                                   self.area.get_height())
+        x, y = x / self._scale, y / self._scale
+        return wheel.hit(x, y), wheel.in_cancel(x, y)
 
     def _on_draw(self, _area, cr, w, h) -> None:
         dim = self.app.desktop.overlay_dim
@@ -229,7 +243,9 @@ class Overlay(Gtk.Window):
             # janela escurece a tela atrás da roda, entrando junto com ela
             cr.set_source_rgba(0, 0, 0, dim * min(self.state.progress, 1.0))
             cr.paint()
-        draw(cr, self._ensure_wheel(w, h), self.state)
+        wheel = self._ensure_wheel(w, h)
+        cr.scale(self._scale, self._scale)
+        draw(cr, wheel, self.state)
 
     def _animate(self) -> None:
         if not self._ticking:
@@ -271,10 +287,7 @@ class Overlay(Gtk.Window):
 
     # -- interação ---------------------------------------------------------
     def _hover(self, x: float, y: float) -> None:
-        wheel = self._ensure_wheel(self.area.get_width(),
-                                   self.area.get_height())
-        hover = wheel.hit(x, y)
-        cancel = wheel.in_cancel(x, y)
+        hover, cancel = self._pick(x, y)
         if hover != self.state.hover or cancel != self.state.cancel_hover:
             self.state.hover = hover
             self.state.cancel_hover = cancel
@@ -304,11 +317,9 @@ class Overlay(Gtk.Window):
 
     def _on_drop(self, _t, value, x, y) -> bool:
         paths = paths_from_filelist(value) or self.paths
-        wheel = self._ensure_wheel(self.area.get_width(),
-                                   self.area.get_height())
-        idx = wheel.hit(x, y)
+        idx = self._pick(x, y)[0]
         ops = self.ops if paths == self.paths else \
-            options_for(paths, self.state.mode)
+            options_for(paths, self.state.mode, settings.shows)
         # esconder só depois que o GTK concluir o drop
         GLib.idle_add(lambda: (self.close_wheel(), False)[1])
         if idx is None or idx >= len(ops) or not paths:
@@ -318,9 +329,7 @@ class Overlay(Gtk.Window):
 
     def _on_click(self, _g, _n, x, y) -> None:
         # Uso sem arraste (teste/demonstração): clicar escolhe o setor.
-        wheel = self._ensure_wheel(self.area.get_width(),
-                                   self.area.get_height())
-        idx = wheel.hit(x, y)
+        idx = self._pick(x, y)[0]
         paths = list(self.paths)
         self.close_wheel()
         if idx is not None and idx < len(self.ops) and paths:
@@ -348,47 +357,6 @@ class Overlay(Gtk.Window):
             return False
         self._animate()
         return True
-
-
-# --------------------------------------------------------------------------
-# Janela "Flutuar": guarda arquivos para arrastar depois
-# --------------------------------------------------------------------------
-
-class FloatWindow(Gtk.Window):
-    def __init__(self, app, paths: list[Path]):
-        n = len(paths)
-        super().__init__(application=app,
-                         title=f"Mexerica — {paths[0].name if n == 1 else f'{n} arquivos'}",
-                         resizable=False, default_width=220)
-        self.add_css_class("mx-window")
-        self.paths = paths
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        box.add_css_class("mexerica-float-box")
-        ctype, _ = Gio.content_type_guess(str(paths[0]), None)
-        icon = Gtk.Image.new_from_gicon(Gio.content_type_get_icon(ctype))
-        icon.set_pixel_size(48)
-        label = Gtk.Label(label=paths[0].name if n == 1 else f"{n} arquivos",
-                          ellipsize=Pango.EllipsizeMode.END,
-                          max_width_chars=22, xalign=0)
-        close = Gtk.Button(icon_name="window-close-symbolic")
-        close.add_css_class("flat")
-        close.connect("clicked", lambda *_: self.close())
-        box.append(icon)
-        box.append(label)
-        box.append(close)
-        self.set_child(box)
-        self.set_tooltip_text("Arraste daqui para qualquer lugar")
-
-        src = Gtk.DragSource(actions=Gdk.DragAction.COPY | Gdk.DragAction.MOVE)
-        src.connect("prepare", self._prepare)
-        src.connect("drag-end", lambda *_: self.close())
-        box.add_controller(src)
-
-    def _prepare(self, _src, _x, _y):
-        files = [Gio.File.new_for_path(str(p)) for p in self.paths]
-        flist = Gdk.FileList.new_from_array(files)
-        return Gdk.ContentProvider.new_for_value(
-            GObject.Value(Gdk.FileList, flist))
 
 
 # --------------------------------------------------------------------------
@@ -423,21 +391,19 @@ class MexericaApp(Gtk.Application):
                          flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self.overlay: Overlay | None = None
         self.desktop = desktop.backend(self)
+        self.settings_window = None
         self._job = 0
         self._keep_windows: list[Gtk.Window] = []
+        self._css = Gtk.CssProvider()
 
     # -- ciclo de vida -----------------------------------------------------
     def do_startup(self):
         Gtk.Application.do_startup(self)
         self.hold()          # serviço: continua vivo sem janelas
-        provider = Gtk.CssProvider()
-        if hasattr(provider, "load_from_string"):       # GTK >= 4.12
-            provider.load_from_string(CSS)
-        else:
-            provider.load_from_data(CSS.encode(), -1)
         Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(), provider,
+            Gdk.Display.get_default(), self._css,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.apply_settings()
 
         def add(name, ptype, cb):
             act = Gio.SimpleAction.new(
@@ -452,6 +418,7 @@ class MexericaApp(Gtk.Application):
         add("open-file", "as", lambda _a, p: self.open_files(p.unpack()))
         add("open-log", None, lambda *_: self.open_files(
             [str(cache_dir() / "mexerica.log")]))
+        add("settings", None, lambda *_: self.show_settings())
         add("quit", None, lambda *_: self.quit())
         self.desktop.start()
         # a primeira roda não espera pelas sondagens lentas (magick)
@@ -460,8 +427,35 @@ class MexericaApp(Gtk.Application):
                  os.getpid(), self.desktop.name)
 
     def do_activate(self):
-        # Aberto pelo menu de apps: mostra uma janela de status.
-        self._show_status()
+        # Aberto pelo menu de apps (ou de novo, com o serviço rodando).
+        self.show_settings()
+
+    def do_shutdown(self):
+        self.desktop.stop()          # tira o ícone da bandeja
+        Gtk.Application.do_shutdown(self)
+
+    # -- configurações -------------------------------------------------------
+    def apply_settings(self) -> None:
+        """Estilo, opacidade e animações valem na hora (Configurações)."""
+        cfg = settings.get()
+        TH.apply(cfg["style"], cfg["window_opacity"] / 100, cfg["animations"])
+        css = CSS + TH.CSS
+        if hasattr(self._css, "load_from_string"):       # GTK >= 4.12
+            self._css.load_from_string(css)
+        else:
+            self._css.load_from_data(css.encode(), -1)
+        if self.overlay is not None:
+            self.overlay.wheel = None
+            self.overlay.area.queue_draw()
+
+    def show_settings(self) -> None:
+        from .settings_window import SettingsWindow
+        if self.settings_window is None:
+            self.settings_window = SettingsWindow(self)
+            self.settings_window.connect(
+                "close-request",
+                lambda *_: setattr(self, "settings_window", None) or False)
+        self.settings_window.present()
 
     # -- roda ----------------------------------------------------------------
     def show_wheel(self, mode: str, paths: list[Path], x: int = 0,
@@ -509,8 +503,9 @@ class MexericaApp(Gtk.Application):
         job_id = f"job-{self._job}"
         verb = {CONVERT: "Convertendo", TOOLS: "Processando",
                 ACTIONS: "Executando"}[op.group]
-        self.notify(job_id, f"{verb}: {op.label}", _caption(paths),
-                    progress=True)
+        if settings.get()["notify_start"]:
+            self.notify(job_id, f"{verb}: {op.label}", _caption(paths),
+                        progress=True)
 
         def worker():
             try:
@@ -648,36 +643,6 @@ class MexericaApp(Gtk.Application):
     def notify(self, nid, title, body="", buttons=None, default=None,
                progress=False) -> None:
         self.desktop.notify(nid, title, body, buttons, default, progress)
-
-    def _show_status(self) -> None:
-        win = Gtk.Window(application=self, title="Mexerica",
-                         default_width=460)
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
-                      margin_top=18, margin_bottom=18, margin_start=18,
-                      margin_end=18)
-        lines = [
-            f"<b>Mexerica {__version__}</b> está rodando.",
-            "",
-            "Arraste um arquivo e <b>segure Shift</b>: aparece a roda de "
-            "formatos.",
-            "<b>Shift + Alt</b>: ferramentas  ·  <b>Shift + Ctrl</b>: ações",
-            "Solte no miolo para cancelar.",
-            "",
-            self.desktop.status(),
-        ]
-        missing = [n for n in ("ffmpeg", "magick", "pandoc", "qpdf", "gs",
-                               "exiftool", "zbarimg", "bsdtar", "pdftoppm")
-                   if not T.has(n)]
-        if not office.any_office():
-            missing.append("Office (Microsoft Office, LibreOffice ou typst)")
-        if missing:
-            lines.append("Programas ausentes (as opções somem da roda): "
-                         + ", ".join(missing))
-        label = Gtk.Label(use_markup=True, wrap=True, xalign=0)
-        label.set_markup("\n".join(lines))
-        box.append(label)
-        win.set_child(box)
-        win.present()
 
 
 def _short(path: Path) -> str:

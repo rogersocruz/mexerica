@@ -2,6 +2,11 @@
 
 Toda cor, medida e duração da interface mora aqui. Cores são tuplas RGB(A)
 de 0 a 1 para o cairo; a versão em hex fica no comentário e no CSS.
+
+As cores vêm de um estilo (STYLES); apply() troca o estilo, a opacidade
+das janelas e as animações em tempo real (Configurações). Quem desenha lê
+sempre TH.<NOME> na hora, então a troca vale no próximo quadro; o CSS é
+refeito e o app o recarrega.
 """
 from __future__ import annotations
 
@@ -19,17 +24,54 @@ def rgba255(r: int, g: int, b: int, a: float) -> tuple[float, ...]:
 
 
 # --------------------------------------------------------------------------
-# Paleta
+# Estilos (paletas). "mexerica" é o visual original.
 # --------------------------------------------------------------------------
-ORANGE = "#FF5A1F"                 # ação primária, hover, alças
-ORANGE_DEEP = "#FD4D02"            # fim do gradiente de hover
-ORANGE_RING = "#F79241"            # anel do miolo
-ORANGE_PILL = "#FDC375"            # pílula do miolo
-TEXT = "#3A2A20"                   # texto em repouso (marrom quase preto)
-TEXT_SOFT = "#8A4A10"              # miolo, botões planos, opções inativas
+# accent: ação primária, hover, alças · deep: fim do gradiente de hover ·
+# ring/pill: miolo · text: texto em repouso · soft: miolo, botões planos ·
+# top/bottom: gradiente das janelas · sector_*/rim/edge/rim_stroke: vidro da
+# roda · shadow: sombra da roda
+STYLES: dict[str, dict] = {
+    "mexerica": dict(
+        name="Mexerica", accent="#FF5A1F", deep="#FD4D02", ring="#F79241",
+        pill="#FDC375", text="#3A2A20", soft="#8A4A10", top="#FFB45A",
+        bottom="#FF8A4C", sector_top=(255, 242, 232, 0.70),
+        sector_bottom=(255, 232, 214, 0.56), rim=(255, 246, 236, 0.35),
+        rim_stroke=(255, 255, 255, 0.60), edge=(255, 255, 255, 0.55),
+        shadow=(120, 40, 0, 0.18)),
+    "oceano": dict(
+        name="Oceano", accent="#1E7BEA", deep="#1462C9", ring="#5AA2F0",
+        pill="#A9D1FA", text="#14263A", soft="#1F4E7A", top="#8CC4FA",
+        bottom="#5A9EF0", sector_top=(236, 245, 255, 0.72),
+        sector_bottom=(222, 236, 252, 0.58), rim=(240, 247, 255, 0.35),
+        rim_stroke=(255, 255, 255, 0.60), edge=(255, 255, 255, 0.55),
+        shadow=(0, 40, 110, 0.18)),
+    "menta": dict(
+        name="Menta", accent="#13A06B", deep="#0E8657", ring="#4CC793",
+        pill="#A6E8C9", text="#13302A", soft="#1E5E49", top="#8EE3BE",
+        bottom="#4FC896", sector_top=(236, 252, 245, 0.72),
+        sector_bottom=(220, 246, 234, 0.58), rim=(240, 252, 247, 0.35),
+        rim_stroke=(255, 255, 255, 0.60), edge=(255, 255, 255, 0.55),
+        shadow=(0, 90, 50, 0.18)),
+    "uva": dict(
+        name="Uva", accent="#8B4DFF", deep="#7433F0", ring="#AD82FF",
+        pill="#D8C3FF", text="#271A3D", soft="#553089", top="#C3A4FF",
+        bottom="#9F74FF", sector_top=(246, 240, 255, 0.72),
+        sector_bottom=(236, 226, 255, 0.58), rim=(248, 244, 255, 0.35),
+        rim_stroke=(255, 255, 255, 0.60), edge=(255, 255, 255, 0.55),
+        shadow=(60, 0, 120, 0.18)),
+    "grafite": dict(
+        name="Grafite", accent="#FF7A3D", deep="#F05F1E", ring="#FF9A63",
+        pill="#4A4A50", text="#F2F2F2", soft="#D2D2D8", top="#3C3C42",
+        bottom="#26262B", sector_top=(62, 62, 68, 0.80),
+        sector_bottom=(40, 40, 46, 0.74), rim=(28, 28, 32, 0.45),
+        rim_stroke=(255, 255, 255, 0.22), edge=(255, 255, 255, 0.16),
+        shadow=(0, 0, 0, 0.35)),
+}
+STYLE = "mexerica"
 WHITE = "#FFFFFF"
-WINDOW_TOP = "#FFB45A"             # gradiente das janelas
-WINDOW_BOTTOM = "#FF8A4C"
+# preenchidos por apply()
+ORANGE = ORANGE_DEEP = ORANGE_RING = ORANGE_PILL = ""
+TEXT = TEXT_SOFT = WINDOW_TOP = WINDOW_BOTTOM = ""
 WINDOW_ALPHA = 0.92
 
 # --------------------------------------------------------------------------
@@ -52,27 +94,21 @@ HOVER_GROW = 0.02                  # setor em hover cresce 2% para fora
 SLOP = 48.0                        # tolerância além do aro que ainda seleciona
 EDGE_MARGIN = 12.0                 # distância mínima da borda da tela
 
-RIM_FILL = rgba255(255, 246, 236, 0.35)     # branco quente ~35%
-RIM_STROKE = rgba255(255, 255, 255, 0.60)
 RIM_STROKE_W = 1.5
-CORE_RING = _hex(ORANGE_RING, 0.70)
-CORE_PILL = _hex(ORANGE_PILL)
-SECTOR_TOP = rgba255(255, 242, 232, 0.70)   # repouso: mais claro no topo
-SECTOR_BOTTOM = rgba255(255, 232, 214, 0.56)
-SECTOR_EDGE = rgba255(255, 255, 255, 0.55)
-HOVER_TOP = _hex(ORANGE)
-HOVER_BOTTOM = _hex(ORANGE_DEEP)
-SHADOW = rgba255(120, 40, 0, 0.18)
+# cores da roda: apply() preenche a partir do estilo (repouso mais claro no
+# topo, hover no acento)
+RIM_FILL = RIM_STROKE = CORE_RING = CORE_PILL = SECTOR_TOP = ()
+SECTOR_BOTTOM = SECTOR_EDGE = HOVER_TOP = HOVER_BOTTOM = SHADOW = ()
 SHADOW_BLUR = 24.0
 SHADOW_DY = 6.0
 
-LABEL_COLOR = _hex(TEXT)
+LABEL_COLOR = ()
 LABEL_HOVER = _hex(WHITE)
 LABEL_PX = 11.0
 LABEL_MIN_PX = 8.0                 # encolhe até aqui antes de quebrar linha
 LABEL_WEIGHT = 700
 LABEL_TRACKING = 0.5               # px
-CORE_COLOR = _hex(TEXT_SOFT)
+CORE_COLOR = ()
 CORE_PX = 10.0
 CORE_WEIGHT = 600
 ICON_PX = 16.0
@@ -80,7 +116,8 @@ ICON_GAP = 3.0
 ICON_STROKE = 1.5
 FONT_FAMILY = "Inter, Cantarell, Segoe UI, Sans"
 
-# Movimento (ms)
+# Movimento (ms); sem animações, apply() reduz a 1 ms
+MOTION = {"ENTER_MS": 140, "HOVER_MS": 80, "MODE_FADE_MS": 120}
 ENTER_MS = 140
 ENTER_SCALE = 0.92
 HOVER_MS = 80
@@ -160,7 +197,7 @@ WINDOW_RADIUS = 8 if sys.platform == "win32" else 16
 HANDLE_PX = 8                      # alças quadradas do recorte
 CROP_DIM = rgba255(60, 60, 60, 0.55)
 CROP_LINE = rgba255(255, 255, 255, 0.95)
-HANDLE = _hex(ORANGE)
+HANDLE = ()                        # acento do estilo (apply)
 SWATCH_PX = 22
 SWATCH_RADIUS = 6
 
@@ -181,8 +218,8 @@ BG_RATIOS: list[tuple[str, float | None]] = [
     ("Auto", None), ("1:1", 1.0), ("16:9", 16 / 9), ("4:5", 4 / 5),
 ]
 
-CSS = """
-/* ---------- janelas de edição: vidro laranja ---------- */
+_CSS = """
+/* ---------- janelas de edição: vidro na cor do estilo ---------- */
 window.mx-window {
   background: linear-gradient(180deg,
       alpha(%(top)s, %(alpha)s), alpha(%(bottom)s, %(alpha)s));
@@ -269,11 +306,88 @@ button.mx-pill { border-radius: 999px; padding: 2px 10px; font-size: 11px; font-
 /* janela Flutuar (com barra do sistema) */
 window.mx-window headerbar { background: none; box-shadow: none; border: none; color: %(text)s; }
 
+/* janela Flutuar: redonda, desenhada pelo app (floating.py) */
+window.mx-float, window.mx-float.background {
+  background: none; box-shadow: none; border: none;
+}
+.mx-float-label {
+  background: alpha(%(top)s, 0.95); color: %(text)s; border-radius: 999px;
+  padding: 3px 10px; font-weight: 600; font-size: 11px;
+  box-shadow: 0 1px 4px alpha(black, 0.18);
+}
+button.mx-float-close {
+  min-width: 0; min-height: 0; padding: 0; border-radius: 999px;
+  background: %(orange)s; color: white; font-weight: 700; font-size: 14px;
+  border: 2px solid white; box-shadow: 0 1px 4px alpha(black, 0.25);
+}
+button.mx-float-close:hover { opacity: 0.88; }
+.mx-float-badge {
+  background: %(orange)s; color: white; border-radius: 999px;
+  min-width: 18px; padding: 1px 5px; font-weight: 700; font-size: 11px;
+  border: 2px solid white;
+}
+
+/* Configurações (settings_window.py): janela comum, acento do estilo */
+.mx-settings .mx-page-title { font-size: 20px; font-weight: 700; }
+.mx-settings .mx-section { font-weight: 700; font-size: 12px; opacity: 0.65;
+  margin-top: 8px; }
+.mx-settings .mx-hint { font-size: 12px; opacity: 0.7; }
+.mx-settings button.mx-chip { border-radius: 999px; padding: 3px 12px;
+  font-weight: 600; font-size: 12px; }
+.mx-settings button.mx-chip:checked { background: %(orange)s; color: white; }
+.mx-settings button.mx-chip.mx-missing { opacity: 0.5; }
+.mx-settings button.mx-style { border-radius: 12px; padding: 6px 10px; }
+.mx-settings button.mx-style:checked {
+  box-shadow: inset 0 0 0 2px %(orange)s; background: alpha(%(orange)s, 0.08);
+}
+.mx-settings .mx-preview {
+  border-radius: 14px;
+  background: linear-gradient(135deg, #d6dde6, #8e9fb3 60%%, #5f6f84);
+}
+.mx-settings .mx-ok { color: #1b8a3a; font-weight: 700; }
+.mx-settings .mx-key { color: %(orange)s; font-weight: 700; }
+.mx-settings .mx-missing-mark { color: #b3261e; font-weight: 700; }
+
 /* páginas do PDF */
 window.mx-window button.mx-page { padding: 6px; border-radius: 10px; background: alpha(white, 0.30); border: 2px solid transparent; }
 window.mx-window button.mx-page:checked { background: alpha(white, 0.55); border-color: %(orange)s; }
-""" % {
-    "top": WINDOW_TOP, "bottom": WINDOW_BOTTOM, "alpha": WINDOW_ALPHA,
-    "radius": WINDOW_RADIUS, "text": TEXT, "soft": TEXT_SOFT,
-    "orange": ORANGE, "sw": SWATCH_PX, "swr": SWATCH_RADIUS,
-}
+"""
+CSS = ""
+
+
+def apply(style: str = "mexerica", opacity: float = 0.92,
+          animations: bool = True) -> None:
+    """Troca o estilo, a opacidade das janelas e as animações."""
+    global STYLE, ORANGE, ORANGE_DEEP, ORANGE_RING, ORANGE_PILL, TEXT
+    global TEXT_SOFT, WINDOW_TOP, WINDOW_BOTTOM, WINDOW_ALPHA, RIM_FILL
+    global RIM_STROKE, CORE_RING, CORE_PILL, SECTOR_TOP, SECTOR_BOTTOM
+    global SECTOR_EDGE, HOVER_TOP, HOVER_BOTTOM, SHADOW, LABEL_COLOR
+    global CORE_COLOR, HANDLE, CSS, ENTER_MS, HOVER_MS, MODE_FADE_MS
+    if style not in STYLES:
+        style = "mexerica"
+    p = STYLES[style]
+    STYLE = style
+    ORANGE, ORANGE_DEEP = p["accent"], p["deep"]
+    ORANGE_RING, ORANGE_PILL = p["ring"], p["pill"]
+    TEXT, TEXT_SOFT = p["text"], p["soft"]
+    WINDOW_TOP, WINDOW_BOTTOM = p["top"], p["bottom"]
+    WINDOW_ALPHA = max(0.5, min(float(opacity), 1.0))
+    RIM_FILL, RIM_STROKE = rgba255(*p["rim"]), rgba255(*p["rim_stroke"])
+    SECTOR_TOP, SECTOR_BOTTOM = (rgba255(*p["sector_top"]),
+                                 rgba255(*p["sector_bottom"]))
+    SECTOR_EDGE, SHADOW = rgba255(*p["edge"]), rgba255(*p["shadow"])
+    CORE_RING, CORE_PILL = _hex(ORANGE_RING, 0.70), _hex(ORANGE_PILL)
+    HOVER_TOP, HOVER_BOTTOM = _hex(ORANGE), _hex(ORANGE_DEEP)
+    LABEL_COLOR, CORE_COLOR = _hex(TEXT), _hex(TEXT_SOFT)
+    HANDLE = _hex(ORANGE)
+    ENTER_MS, HOVER_MS, MODE_FADE_MS = (
+        MOTION[k] if animations else 1
+        for k in ("ENTER_MS", "HOVER_MS", "MODE_FADE_MS"))
+    CSS = _CSS % {
+        "top": WINDOW_TOP, "bottom": WINDOW_BOTTOM, "alpha": WINDOW_ALPHA,
+        "radius": WINDOW_RADIUS, "text": TEXT, "soft": TEXT_SOFT,
+        "orange": ORANGE, "sw": SWATCH_PX, "swr": SWATCH_RADIUS,
+    }
+
+
+apply()

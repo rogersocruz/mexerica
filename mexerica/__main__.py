@@ -7,7 +7,8 @@
 
 O `run` permite usar o mesmo motor em scripts, no Nautilus Scripts ou num
 menu de serviço do Dolphin (KDE) sem depender da extensão do GNOME Shell.
-No Windows, `daemon` é como o atalho de inicialização sobe o serviço.
+No Windows, `daemon` é como o atalho de inicialização sobe o serviço (sem
+janela); `mexerica` sem argumento abre as Configurações.
 """
 from __future__ import annotations
 
@@ -92,23 +93,7 @@ def _open_editor(op_id: str, files: list[str]) -> int:
 def cmd_doctor(_args) -> int:
     from .engine import office
     from .engine import tools as T
-    progs = [
-        ("ffmpeg", "vídeo e áudio"), ("ffprobe", "duração/tamanho alvo"),
-        ("magick", "imagens (ImageMagick)"), ("montage", "colagem"),
-        ("soffice", "documentos (LibreOffice, opcional)"),
-        ("pandoc", "Markdown/EPUB e documentos sem Office"),
-        ("typst", "PDF pelo pandoc, sem Office"),
-        ("pdftoppm", "PDF → imagens (poppler)"), ("pdftotext", "PDF → texto"),
-        ("pdfimages", "extrair imagens de PDF"), ("qpdf", "juntar/dividir PDF"),
-        ("gs", "comprimir PDF (Ghostscript)"),
-        ("exiftool", "metadados"), ("zbarimg", "ler QR code (zbar)"),
-        ("bsdtar", "ZIP/7Z/TAR/RAR (libarchive)"),
-        ("ffplay", "ouvir o trecho no Cortar…"),
-        ("rembg", "remover fundo de fotos com IA (opcional)"),
-    ]
-    if not WINDOWS:
-        progs.append(("wl-copy", "clipboard sem a extensão (wl-clipboard)"))
-    for name, what in progs:
+    for name, what in T.PROGRAMS:
         found = T.resolve(name)
         mark = "ok " if found else "-- "
         print(f"{mark}{name:<10} {what}" + ("" if found else "  (ausente)"))
@@ -140,7 +125,10 @@ def main(argv: list[str] | None = None) -> int:
     if not argv or argv[0].startswith("--gapplication") or argv[0] == "daemon":
         _setup_logging(verbose=False)
         from .app import main as app_main
-        rest = [a for a in argv if a != "daemon"]
+        # daemon (atalho de inicialização do Windows) = modo serviço do
+        # GApplication, o mesmo do autostart do GNOME: sobe sem abrir janela.
+        # Sem argumento (menu Iniciar), abre as Configurações.
+        rest = ["--gapplication-service" if a == "daemon" else a for a in argv]
         return app_main([sys.argv[0], *rest])
 
     parser = argparse.ArgumentParser(prog="mexerica")

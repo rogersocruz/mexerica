@@ -1,6 +1,7 @@
 """Backend do GNOME: quem percebe o arraste é a extensão do Shell
 (extension/), que chama a ação D-Bus `show` do serviço, põe a roda acima
-de tudo e borra o fundo. Aqui fica o resto da conversa com o desktop.
+de tudo, borra o fundo e mostra o ícone na barra superior enquanto o
+serviço roda. Aqui fica o resto da conversa com o desktop.
 """
 from __future__ import annotations
 
@@ -13,7 +14,8 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gdk, Gio, GLib  # noqa: E402
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gdk, Gio, GLib, GObject, Gtk  # noqa: E402
 
 from ..engine import tools as T  # noqa: E402
 
@@ -35,6 +37,9 @@ class GnomeDesktop:
     def start(self) -> None:
         pass                 # o arraste chega pela extensão
 
+    def stop(self) -> None:
+        pass
+
     # -- roda ----------------------------------------------------------------
     def show_overlay(self, win) -> None:
         # Fallback para quando o maximizar não é aplicado (sem gerenciador
@@ -55,6 +60,61 @@ class GnomeDesktop:
 
     def dialog_parent(self):
         return None
+
+    def drag_source(self, widget, paths: list[Path], done) -> None:
+        """Arrastar `widget` leva os arquivos (janela Flutuar)."""
+        def prepare(*_):
+            files = [Gio.File.new_for_path(str(p)) for p in paths]
+            return Gdk.ContentProvider.new_for_value(
+                GObject.Value(Gdk.FileList, Gdk.FileList.new_from_array(files)))
+        src = Gtk.DragSource(actions=Gdk.DragAction.COPY | Gdk.DragAction.MOVE)
+        src.connect("prepare", prepare)
+        src.connect("drag-end", lambda *_: done())
+        widget.add_controller(src)
+
+    # -- arquivos como o gerenciador de arquivos mostra ----------------------
+    def file_icon(self, path: Path, size: int):
+        """Miniatura (se o Nautilus já gerou) ou o ícone do tipo (Gio.Icon)."""
+        try:
+            info = Gio.File.new_for_path(str(path)).query_info(
+                "standard::icon,thumbnail::path", Gio.FileQueryInfoFlags.NONE,
+                None)
+        except GLib.Error:
+            return None
+        thumb = info.get_attribute_byte_string("thumbnail::path")
+        if thumb:
+            try:
+                return Gdk.Texture.new_from_filename(thumb)
+            except GLib.Error:
+                pass
+        return info.get_icon()
+
+    def display_name(self, path: Path) -> str:
+        try:
+            return Gio.File.new_for_path(str(path)).query_info(
+                "standard::display-name", Gio.FileQueryInfoFlags.NONE,
+                None).get_display_name()
+        except GLib.Error:
+            return Path(path).name
+
+    # -- iniciar com o sistema (autostart do XDG) ----------------------------
+    def autostart(self) -> bool | None:
+        src = _autostart_source()
+        if src is None:
+            return None
+        return "X-GNOME-Autostart-enabled=false" not in src.read_text()
+
+    def set_autostart(self, enabled: bool) -> None:
+        """Grava a escolha na cópia do usuário (~/.config/autostart), que
+        vale por cima da do sistema."""
+        src = _autostart_source()
+        if src is None:
+            return
+        lines = [ln for ln in src.read_text().splitlines()
+                 if not ln.startswith("X-GNOME-Autostart-enabled=")]
+        lines.append(f"X-GNOME-Autostart-enabled={str(enabled).lower()}")
+        _USER_AUTOSTART.parent.mkdir(parents=True, exist_ok=True)
+        _USER_AUTOSTART.write_text("\n".join(lines) + "\n")
 
     # -- sistema -------------------------------------------------------------
     def set_clipboard(self, text: str) -> None:
@@ -138,6 +198,20 @@ class GnomeDesktop:
 
     def status(self) -> str:
         return f"Extensão do GNOME Shell: <b>{_extension_state()}</b>"
+
+
+_DESKTOP_FILE = "io.github.rogersocruz.Mexerica.desktop"
+_USER_AUTOSTART = Path(os.environ.get("XDG_CONFIG_HOME")
+                       or Path.home() / ".config") / "autostart" / _DESKTOP_FILE
+
+
+def _autostart_source() -> Path | None:
+    """O .desktop de autostart que vale: o do usuário ou o do sistema."""
+    for path in (_USER_AUTOSTART, Path("/etc/xdg/autostart", _DESKTOP_FILE),
+                 Path("/usr/local/etc/xdg/autostart", _DESKTOP_FILE)):
+        if path.exists():
+            return path
+    return None
 
 
 def _session() -> Gio.DBusConnection:

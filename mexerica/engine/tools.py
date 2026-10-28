@@ -19,6 +19,25 @@ from .. import cache_dir
 WINDOWS = sys.platform == "win32"
 
 
+# Programas que a Mexerica usa e para quê (doctor e Configurações > Sobre)
+PROGRAMS: list[tuple[str, str]] = [
+    ("ffmpeg", "vídeo e áudio"), ("ffprobe", "duração/tamanho alvo"),
+    ("magick", "imagens (ImageMagick)"), ("montage", "colagem"),
+    ("soffice", "documentos (LibreOffice, opcional)"),
+    ("pandoc", "Markdown/EPUB e documentos sem Office"),
+    ("typst", "PDF pelo pandoc, sem Office"),
+    ("pdftoppm", "PDF → imagens (poppler)"), ("pdftotext", "PDF → texto"),
+    ("pdfimages", "extrair imagens de PDF"), ("qpdf", "juntar/dividir PDF"),
+    ("gs", "comprimir PDF (Ghostscript)"),
+    ("exiftool", "metadados"), ("zbarimg", "ler QR code (zbar)"),
+    ("bsdtar", "ZIP/7Z/TAR/RAR (libarchive)"),
+    ("ffplay", "ouvir o trecho no Cortar…"),
+    ("rembg", "remover fundo de fotos com IA (opcional)"),
+]
+if not WINDOWS:
+    PROGRAMS.append(("wl-copy", "clipboard sem a extensão (wl-clipboard)"))
+
+
 @functools.lru_cache(maxsize=None)
 def _search_path() -> str | None:
     """No Windows, além do PATH: a pasta do python.exe (no MSYS2 é onde
