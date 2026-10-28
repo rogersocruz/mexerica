@@ -5,10 +5,10 @@ bolha sempre visível, para você arrastá-los depois para qualquer lugar: um
 e-mail, um chat, outra pasta, um site.
 
 ```
-        ╭────────╮
-       │  [ícone] │(×)   ← fechar, às 3 horas
-        ╰────────╯
-       relatório.pdf      ← nome; arraste aqui para mover a bolha
+              ╭────────╮
+    mover → (✥)│  [ícone] │(×) ← fechar, às 3 horas
+              ╰────────╯
+             relatório.pdf      ← nome; também move a bolha
 ```
 
 - **O ícone é o mesmo que o seu computador mostra**: a miniatura (fotos,
@@ -18,7 +18,8 @@ e-mail, um chat, outra pasta, um site.
   `.lnk`; extensões seguem a configuração do Explorer).
 - **× às 3 horas** fecha a bolha sem fazer nada.
 - **Arrastar a bolha** leva os arquivos. Terminado o arraste, a bolha some.
-- **Arrastar o nome** move a bolha pela tela.
+- **Botão de arrastar às 9 horas** (setas em cruz): segure e arraste para
+  mover a bolha pela tela. Arrastar o nome faz o mesmo.
 - **Vários arquivos:** a bolha mostra o ícone do primeiro, um contador no
   canto e "N arquivos" embaixo; arrastar leva todos.
 - A bolha fica acima das outras janelas. No Windows ela nasce sob o ponteiro;

@@ -105,8 +105,9 @@ abre a janela pelo serviço que já está rodando.
 **Ações (Shift + Ctrl):** copiar caminho, abrir terminal na pasta, copiar
 para…, mover para…, **flutuar** e ZIP de tudo. Flutuar guarda os arquivos
 numa bolha redonda sempre visível, com o ícone que o sistema mostra para o
-arquivo (miniatura, ou o ícone do programa), o nome embaixo e o × às 3
-horas; arrastar a bolha leva os arquivos, arrastar o nome a move.
+arquivo (miniatura, ou o ícone do programa), o nome embaixo, o × às 3
+horas e o botão de arrastar às 9; arrastar a bolha leva os arquivos,
+arrastar o botão (ou o nome) a move.
 
 **Configurações** (menu de apps / Iniciar, ou o ícone da Mexerica na bandeja
 do Windows / na barra superior do GNOME, que fica à vista enquanto ela roda):
