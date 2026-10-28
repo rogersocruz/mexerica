@@ -7,6 +7,7 @@
 
 O `run` permite usar o mesmo motor em scripts, no Nautilus Scripts ou num
 menu de serviço do Dolphin (KDE) sem depender da extensão do GNOME Shell.
+No Windows, `daemon` é como o atalho de inicialização sobe o serviço.
 """
 from __future__ import annotations
 
@@ -15,11 +16,12 @@ import logging
 import sys
 from pathlib import Path
 
-from . import __version__
+from . import __version__, cache_dir
+from .desktop import WINDOWS, setup_process
 
 
 def _setup_logging(verbose: bool) -> None:
-    logdir = Path.home() / ".cache" / "mexerica"
+    logdir = cache_dir()
     logdir.mkdir(parents=True, exist_ok=True)
     handlers: list[logging.Handler] = [
         logging.FileHandler(logdir / "mexerica.log", encoding="utf-8")]
@@ -98,9 +100,11 @@ def cmd_doctor(_args) -> int:
         ("gs", "comprimir PDF (Ghostscript)"),
         ("exiftool", "metadados"), ("zbarimg", "ler QR code (zbar)"),
         ("bsdtar", "ZIP/7Z/TAR/RAR (libarchive)"),
-        ("wl-copy", "clipboard sem a extensão (wl-clipboard)"),
+        ("ffplay", "ouvir o trecho no Cortar…"),
         ("rembg", "remover fundo de fotos com IA (opcional)"),
     ]
+    if not WINDOWS:
+        progs.append(("wl-copy", "clipboard sem a extensão (wl-clipboard)"))
     for name, what in progs:
         found = T.resolve(name)
         mark = "ok " if found else "-- "
@@ -108,10 +112,14 @@ def cmd_doctor(_args) -> int:
     fmts = T.magick_writable()
     extra = [f for f in ("heic", "avif", "webp", "jxl", "pdf") if f in fmts]
     print(f"\nImageMagick escreve: {', '.join(extra) or 'nenhum extra'}")
+    if WINDOWS:
+        print("Para instalar o que falta: .\\install.ps1 -Converters "
+              "(LibreOffice: -Office)")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
+    setup_process()
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0].startswith("--gapplication") or argv[0] == "daemon":
         _setup_logging(verbose=False)

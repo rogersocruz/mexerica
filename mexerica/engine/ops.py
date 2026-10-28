@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from .. import cache_dir
 from . import formats as F
 from . import tools as T
 
@@ -273,7 +274,7 @@ def _soffice(ctx: Ctx, src: Path, ext: str, filt: str | None = None,
     """LibreOffice headless com perfil próprio (não briga com uma janela do
     LibreOffice aberta) e saída num diretório temporário."""
     outdir = ctx.work / "lo"
-    profile = (Path.home() / ".cache" / "mexerica" / "lo-profile").as_uri()
+    profile = (cache_dir() / "lo-profile").as_uri()
     target = f"{ext}:{filt}" if filt else ext
     argv = T.cmd("soffice") + [f"-env:UserInstallation={profile}",
                                "--headless", "--norestore"]
@@ -541,7 +542,7 @@ def _concat(ctx: Ctx, video: bool) -> list[Step]:
     for p in ctx.srcs:
         safe = str(p).replace("'", r"'\''")
         lines.append(f"file '{safe}'")
-    lst.write_text("\n".join(lines) + "\n")
+    lst.write_text("\n".join(lines) + "\n", encoding="utf-8")
     codec = (_X264 + ["-c:a", "aac", "-b:a", "160k"]) if video \
         else _audio_codec(F.full_ext(ctx.out))
     return [_ff("-f", "concat", "-safe", "0", "-i", str(lst), *codec,

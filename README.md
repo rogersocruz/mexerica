@@ -1,13 +1,15 @@
 # Mexerica 🍊
 
-Conversor de arquivos para o GNOME, inspirado no Tangerine (macOS). Você
-**segura Shift enquanto arrasta um arquivo**: uma roda de formatos aparece
-em volta do ponteiro. Ao soltar o arquivo num formato, a cópia convertida é
-salva ao lado do original. Tudo roda localmente e nada é enviado para a
-internet.
+Conversor de arquivos para o GNOME e o Windows 11, inspirado no Tangerine
+(macOS). Você **segura Shift enquanto arrasta um arquivo**: uma roda de
+formatos aparece em volta do ponteiro. Ao soltar o arquivo num formato, a
+cópia convertida é salva ao lado do original. Tudo roda localmente e nada é
+enviado para a internet.
 
 Funciona em qualquer arraste de arquivos: Nautilus (Arquivos), área de
-trabalho e diálogos. Foi feito para **GNOME Shell 45–51 em Wayland**.
+trabalho e diálogos. Foi feito para **GNOME Shell 45–51 em Wayland** e
+**Windows 11** (Explorer, área de trabalho e diálogos de arquivo). A roda,
+as janelas e as operações são as mesmas nos dois.
 
 ## Atalhos
 
@@ -18,7 +20,7 @@ trabalho e diálogos. Foi feito para **GNOME Shell 45–51 em Wayland**.
 | **Shift + Ctrl**           | Ações (copiar caminho, terminal, copiar/mover, flutuar, ZIP) |
 | Soltar no miolo ou fora    | Cancela                                                |
 | Soltar o Shift             | A roda some e o arraste segue normal                   |
-| **Esc**                    | Cancela o arraste inteiro (comportamento do GNOME)     |
+| **Esc**                    | Cancela o arraste inteiro (comportamento do sistema)   |
 
 Pode trocar de roda sem soltar o arquivo: com Shift já pressionado, aperte
 ou solte Alt/Ctrl. A roda continua no mesmo lugar.
@@ -110,7 +112,8 @@ arrasta o arquivo depois) e ZIP de tudo.
 - Se a pasta de origem for somente leitura, salva em `~/Downloads`.
 - Com vários arquivos, processa todos em lote.
 - Mostra uma notificação no início e no fim, com os botões *Mostrar na
-  pasta* e *Abrir*.
+  pasta* e *Abrir*. No Windows ela aparece no canto da tela, no mesmo
+  vidro das janelas.
 - Uma opção só aparece na roda se o programa que ela usa estiver instalado.
 
 ## Instalação (Arch Linux)
@@ -135,6 +138,58 @@ Para instalar como pacote do sistema, use o PKGBUILD:
 
 Para conferir o que foi detectado: `mexerica doctor`. Para desinstalar:
 `./uninstall.sh`.
+
+## Instalação (Windows 10 e 11)
+
+A interface usa o mesmo GTK 4 do Linux, que no Windows vem do
+[MSYS2](https://www.msys2.org). Basta clonar e rodar, sem administrador:
+
+```powershell
+git clone https://github.com/rogersocruz/mexerica
+cd mexerica
+.\install.cmd -Converters
+```
+
+O `install.cmd` só chama o `install.ps1` com `-ExecutionPolicy Bypass`: o
+padrão do Windows (`Restricted`) não deixa rodar um `.ps1` direto. Se o
+PowerShell já aceita scripts, `.\install.ps1 -Converters` dá no mesmo. Não
+rode como administrador: o serviço tem que ficar no mesmo nível do
+Explorer, senão o Windows bloqueia o arraste para a roda (o instalador
+recusa).
+
+O que é instalado:
+
+| Opção         | Programas                                                        | Para quê |
+|---------------|------------------------------------------------------------------|----------|
+| sempre        | MSYS2 (se faltar), Python 3, GTK 4, PyGObject, pycairo e os ícones Adwaita, com as dependências deles | a roda e as janelas |
+| `-Converters` | pelo MSYS2: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar e libarchive | vídeo e áudio, imagens (HEIC/AVIF, SVG), PDF, QR code, ZIP/7Z/RAR |
+| `-Converters` | pelo winget: Pandoc e ExifTool                                   | Markdown/HTML/EPUB e metadados |
+| `-Office`     | pelo winget: LibreOffice (~350 MB)                               | DOCX, ODT, RTF, PPTX e XLSX (e Markdown/EPUB para PDF) |
+
+Sem o MSYS2, o instalador baixa o pacote base dele e extrai em
+`C:\msys64` (ou em `%LOCALAPPDATA%\msys64`); se o download falhar, tenta
+o winget. Um MSYS2 que já exista (em `C:\msys64`, pelo scoop ou em
+`MSYS2_ROOT`) é aproveitado. A roda só mostra as opções dos programas que
+encontrar, então dá para instalar menos e completar depois. Fora do
+instalador fica só o [rembg](https://github.com/danielgatis/rembg) (REMOVE
+BG com IA, opcional).
+
+**Atalhos de teclado.** O instalador desliga os atalhos do Windows que
+trocam o teclado com **Alt+Shift** (idioma) e **Ctrl+Shift** (layout) e
+avisa no fim: são as mesmas teclas das rodas de ferramentas e de ações, e
+com mais de um teclado instalado cada roda aberta trocaria o teclado
+junto. Para trocar de teclado, use **Win+Espaço**. Quem faz isso é o
+`windows-hotkeys.ps1`: com `-Restore` ele devolve os atalhos como eram (o
+desinstalador também devolve), e `install.ps1 -KeepLayoutHotkeys` não mexe
+neles.
+
+O serviço já sobe no fim da instalação e no login (atalho na pasta
+Inicializar). Não precisa sair da sessão. O pacote fica em
+`%LOCALAPPDATA%\Mexerica` e o comando `mexerica` entra no PATH do usuário
+(vale nos terminais abertos depois). Para conferir: `mexerica doctor`.
+Depois de um `git pull`: `.\install.cmd -AppOnly` (só copia o app e
+reinicia o serviço). Para desinstalar: `.\uninstall.cmd` (o MSYS2 e os
+conversores continuam instalados).
 
 ## Como funciona
 
@@ -166,6 +221,37 @@ gnome-shell: `MetaDnd` emite `dnd-enter` e `dnd-leave` em sessões Wayland, e
 a seleção `SELECTION_DND` contém os URIs (Uniform Resource Identifiers)
 arrastados.
 
+### No Windows
+
+```
+ Explorer ──arraste (OLE)──► imagem de arraste do shell (SysDragImage)
+                                  │
+         Serviço GTK 4 (mexerica) ── a cada 30 ms: botão do mouse,
+                                  │   imagem de arraste e Shift/Alt/Ctrl
+                                  │   (GetAsyncKeyState, mesma regra da
+                                  │   extensão: mexerica/desktop/drag.py)
+                                  ▼
+                janela da roda sobre o monitor do ponteiro, acima de
+                tudo, com o fundo borrado pelo DWM
+                                  │ o arraste do OLE passa a "estar
+                                  │ sobre" ela: GtkDropTarget recebe
+                                  ▼ hover, os arquivos e o drop
+                     Motor (o mesmo) ── ffmpeg, ImageMagick, LibreOffice…
+```
+
+No Windows não existe extensão: qualquer processo pode ler o teclado e o
+mouse a qualquer momento, e todo arraste do shell mostra uma janela com a
+miniatura dos arquivos. O próprio serviço faz o papel da extensão
+(`mexerica/desktop/windows.py`): percebe o arraste, coloca a janela da roda
+acima de tudo, traz as janelas do serviço para a frente e aplica o vidro.
+Os arquivos chegam pelo próprio drop do GTK quando o arraste passa sobre a
+roda; se o arraste não tiver arquivos (texto, link), a roda some.
+
+O que muda entre os desktops fica em `mexerica/desktop/`; roda, janelas e
+motor são os mesmos.
+
+### Motor sem interface
+
 O motor (`mexerica/engine`) não depende de GTK. Ele também roda pela linha
 de comando:
 
@@ -193,6 +279,23 @@ Environment).
   essas teclas a ninguém enquanto um arraste está em andamento. A escolha é
   feita com o mouse. Fora de um arraste (roda aberta via D-Bus), setas, Enter
   e Esc funcionam.
+- **Windows:** Shift durante um arraste no Explorer também força "mover",
+  e o Alt pede "criar atalho". Com a roda aberta, o drop vai para ela e o
+  original fica onde estava.
+- **Windows:** com mais de um teclado, Alt+Shift e Ctrl+Shift trocam o
+  teclado. O instalador desliga esses dois atalhos (veja *Atalhos de
+  teclado* acima); com `-KeepLayoutHotkeys`, cada Shift+Alt ou Shift+Ctrl
+  na roda troca o teclado também.
+- **Windows:** a roda só abre em arrastes do shell (Explorer, área de
+  trabalho, diálogos de arquivo e apps que usam a imagem de arraste do
+  Windows, como os navegadores). Um app que arraste arquivos sem essa
+  imagem não abre a roda.
+- **Windows:** o vidro usa uma API não documentada do DWM
+  (`SetWindowCompositionAttribute`). Se uma atualização do Windows a
+  desligar, as janelas continuam funcionando, só sem o borrão.
+- **Windows:** as notificações são da própria Mexerica (no canto da tela),
+  não da Central de Notificações: o GLib não tem backend de notificação no
+  Windows.
 - Ainda não dá para tarjar ou borrar áreas de uma imagem.
 - *Cortar…* não toca o vídeo, só mostra quadros. O botão de ouvir toca o
   áudio. O player de vídeo do GTK/GStreamer pode derrubar o processo com
@@ -213,10 +316,19 @@ Environment).
   - `~/.cache/mexerica/mexerica.log` (serviço);
   - `journalctl --user -f -o cat /usr/bin/gnome-shell` (extensão).
 
+  No Windows, a suíte inteira passa no Python do MSYS2 com os conversores
+  reais, além da regra do arraste (`tests/test_drag.py`) e das chamadas
+  Win32 que não dependem do GTK (monitor, clipboard, temporário oculto). A
+  roda e as janelas estão sendo validadas numa sessão real. O log fica em
+  `%LOCALAPPDATA%\Mexerica\cache\mexerica.log`; depois de um `git pull`,
+  `.\install.ps1 -AppOnly` atualiza só o app.
+
 ## Desenvolvimento
 
 ```bash
 make test                       # pytest + teste da extensão (node)
+# no Windows (PowerShell, com o Python do MSYS2):
+#   C:\msys64\ucrt64\bin\python.exe -m pytest -q tests
 # abrir a roda sem arrastar (clique escolhe):
 gapplication action io.github.rogersocruz.Mexerica show \
     "('convert', ['file:///caminho/foto.png'], 600, 400)"

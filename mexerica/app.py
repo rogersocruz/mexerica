@@ -1,13 +1,16 @@
 """Serviço GTK 4: janela overlay com a roda, execução dos jobs e notificações.
 
 Fluxo:
-  1. A extensão do GNOME Shell percebe Shift durante um arraste e chama a
-     ação D-Bus `show(modo, uris, x, y)`.
-  2. Abrimos uma janela transparente em tela cheia (a extensão a coloca
-     acima de tudo). Como ela fica sob o ponteiro, o arraste em andamento
-     passa a apontar para ela e o GtkDropTarget recebe hover e drop.
+  1. Alguém percebe Shift durante um arraste: no GNOME, a extensão do
+     Shell, que chama a ação D-Bus `show(modo, uris, x, y)`; no Windows, o
+     próprio serviço (desktop/windows.py), que chama `show_wheel`.
+  2. Abrimos uma janela transparente do tamanho da tela, acima de tudo.
+     Como ela fica sob o ponteiro, o arraste em andamento passa a apontar
+     para ela e o GtkDropTarget recebe hover e drop.
   3. No drop, o setor sob o ponteiro decide a operação; a janela some e o
      job roda numa thread, com notificação de início/fim.
+
+O que muda de um desktop para outro fica em mexerica/desktop/.
 
 Também dá para testar sem extensão:
   gapplication action io.github.rogersocruz.Mexerica show \
@@ -19,7 +22,6 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -30,7 +32,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
-from . import APP_ID, __version__  # noqa: E402
+from . import APP_ID, __version__, cache_dir  # noqa: E402
+from . import desktop  # noqa: E402
 from . import theme as TH  # noqa: E402
 from .engine import ACTIONS, CONVERT, TOOLS, options_for, run  # noqa: E402
 from .engine import tools as T  # noqa: E402
@@ -44,10 +47,6 @@ from .wheel.render import Snapshot, WheelState, draw  # noqa: E402
 log = logging.getLogger("mexerica")
 
 OVERLAY_TITLE = "mexerica-overlay"     # a extensão reconhece por este título
-SHELL_BUS = "org.gnome.Shell"
-SHELL_PATH = "/io/github/rogersocruz/Mexerica"
-SHELL_IFACE = "io.github.rogersocruz.Mexerica.Shell"
-EXT_UUID = "mexerica@rogersocruz.github.io"
 IDLE_HIDE_MS = 4000      # trava de segurança: overlay sem atividade some
 
 CSS = """
@@ -161,7 +160,9 @@ class Overlay(Gtk.Window):
             st.hover_t.clear()
             self._animate()
         st.mode = mode
-        if paths:
+        if paths or first:
+            # roda nova começa sem os arquivos do arraste anterior: até eles
+            # chegarem, o miolo mostra "…"
             self.paths = paths
         self.center = (float(x), float(y))
         self._refresh_ops()
@@ -173,24 +174,10 @@ class Overlay(Gtk.Window):
             st.fade = 1.0
             st.progress = 0.0
             self._animate()
-            self._size_to_monitor()
-            # Maximizada, não tela cheia: o Mutter pinta um fundo preto
-            # atrás de janelas Wayland em tela cheia, e a roda precisa do
-            # fundo transparente. A extensão converte as coordenadas para a
-            # posição real da janela (abaixo da barra superior).
-            self.maximize()
-            self.present()
+            self.app.desktop.show_overlay(self)
         self.wheel = None
         self.area.queue_draw()
         self._arm_idle_hide()
-
-    def _size_to_monitor(self) -> None:
-        # Fallback para quando o maximizar não é aplicado (sem gerenciador
-        # de janelas); no GNOME o maximizar manda.
-        monitors = Gdk.Display.get_default().get_monitors()
-        if monitors.get_n_items():
-            geo = monitors.get_item(0).get_geometry()
-            self.set_default_size(geo.width, geo.height)
 
     def close_wheel(self) -> None:
         if self._idle_src:
@@ -227,7 +214,7 @@ class Overlay(Gtk.Window):
     def _ensure_wheel(self, w: float, h: float) -> Wheel:
         # recalcula se o tamanho mudou (o maximizar chega depois do map)
         if self.wheel is None or self._wheel_size != (w, h):
-            cx, cy = self.center
+            cx, cy = self.app.desktop.wheel_center(self, w, h) or self.center
             if cx <= 0 and cy <= 0:
                 cx, cy = w / 2, h / 2
             self.wheel = Wheel(len(self.ops), cx, cy, w or None, h or None)
@@ -235,6 +222,12 @@ class Overlay(Gtk.Window):
         return self.wheel
 
     def _on_draw(self, _area, cr, w, h) -> None:
+        dim = self.app.desktop.overlay_dim
+        if dim:
+            # sem um compositor que escureça o fundo (Windows), a própria
+            # janela escurece a tela atrás da roda, entrando junto com ela
+            cr.set_source_rgba(0, 0, 0, dim * min(self.state.progress, 1.0))
+            cr.paint()
         draw(cr, self._ensure_wheel(w, h), self.state)
 
     def _animate(self) -> None:
@@ -428,6 +421,7 @@ class MexericaApp(Gtk.Application):
         super().__init__(application_id=APP_ID,
                          flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self.overlay: Overlay | None = None
+        self.desktop = desktop.backend(self)
         self._job = 0
         self._keep_windows: list[Gtk.Window] = []
 
@@ -456,22 +450,35 @@ class MexericaApp(Gtk.Application):
         add("open-editor", "(sas)", self._act_open_editor)
         add("open-file", "as", lambda _a, p: self.open_files(p.unpack()))
         add("open-log", None, lambda *_: self.open_files(
-            [str(Path.home() / ".cache/mexerica/mexerica.log")]))
+            [str(cache_dir() / "mexerica.log")]))
         add("quit", None, lambda *_: self.quit())
-        log.info("Mexerica %s iniciado (pid %s)", __version__, os.getpid())
+        self.desktop.start()
+        # a primeira roda não espera pelas sondagens lentas (magick)
+        threading.Thread(target=T.warm_up, daemon=True).start()
+        log.info("Mexerica %s iniciado (pid %s, %s)", __version__,
+                 os.getpid(), self.desktop.name)
 
     def do_activate(self):
         # Aberto pelo menu de apps: mostra uma janela de status.
         self._show_status()
 
-    # -- ações D-Bus -------------------------------------------------------
-    def _act_show(self, _action, param):
-        mode, uris, x, y = param.unpack()
+    # -- roda ----------------------------------------------------------------
+    def show_wheel(self, mode: str, paths: list[Path], x: int = 0,
+                   y: int = 0) -> None:
         if mode not in (CONVERT, TOOLS, ACTIONS):
             mode = CONVERT
         if self.overlay is None:
             self.overlay = Overlay(self)
-        self.overlay.open(mode, paths_from_uris(uris), x, y)
+        self.overlay.open(mode, paths, x, y)
+
+    def hide_wheel(self) -> None:
+        if self.overlay is not None and self.overlay.get_visible():
+            self.overlay.close_wheel()
+
+    # -- ações D-Bus -------------------------------------------------------
+    def _act_show(self, _action, param):
+        mode, uris, x, y = param.unpack()
+        self.show_wheel(mode, paths_from_uris(uris), x, y)
 
     def _act_open_editor(self, _action, param):
         """Abre uma janela de edição sem a roda (scripts, testes):
@@ -486,8 +493,7 @@ class MexericaApp(Gtk.Application):
         open_editor(self, op, paths)
 
     def _act_hide(self, *_):
-        if self.overlay is not None and self.overlay.get_visible():
-            self.overlay.close_wheel()
+        self.hide_wheel()
 
     # -- execução ----------------------------------------------------------
     def execute(self, op: Op, paths: list[Path]) -> bool:
@@ -527,7 +533,7 @@ class MexericaApp(Gtk.Application):
                 win = TextWindow(self, f"{op.label} — {_caption(paths)}",
                                  text)
                 win.present()
-                self.withdraw_notification(job_id)
+                self.desktop.withdraw(job_id)
             if res.errors:
                 self._notify_errors(job_id + "-e", op, res.errors)
             return False
@@ -576,8 +582,11 @@ class MexericaApp(Gtk.Application):
         dialog = Gtk.FileDialog(
             title="Mover para…" if move else "Copiar para…", modal=False)
         dialog.set_initial_folder(Gio.File.new_for_path(str(paths[0].parent)))
+        parent = self.desktop.dialog_parent()
 
         def done(dlg, result):
+            if parent is not None:
+                parent.destroy()
             try:
                 folder = dlg.select_folder_finish(result)
             except GLib.Error:
@@ -586,7 +595,7 @@ class MexericaApp(Gtk.Application):
             threading.Thread(target=self._copy_move,
                              args=(paths, dest, move), daemon=True).start()
 
-        dialog.select_folder(None, None, done)
+        dialog.select_folder(parent, None, done)
 
     def _copy_move(self, paths, dest: Path, move: bool) -> None:
         outs, errs = [], []
@@ -616,88 +625,28 @@ class MexericaApp(Gtk.Application):
             return False
         GLib.idle_add(report)
 
+    # -- integração com o desktop (mexerica/desktop/) ----------------------
     def open_terminal(self, folder: Path) -> None:
-        d = str(folder)
-        candidates = [
-            ["kgx", f"--working-directory={d}"],
-            ["ptyxis", "--new-window", f"--working-directory={d}"],
-            ["gnome-terminal", f"--working-directory={d}"],
-            ["kitty", "--directory", d],
-            ["alacritty", "--working-directory", d],
-            ["foot", f"--working-directory={d}"],
-            ["wezterm", "start", "--cwd", d],
-            ["konsole", "--workdir", d],
-            ["xdg-terminal-exec"],
-            ["xterm"],
-        ]
-        term = os.environ.get("TERMINAL")
-        if term:
-            candidates.insert(0, [term])
-        for argv in candidates:
-            if shutil.which(argv[0]):
-                subprocess.Popen(argv, cwd=d, start_new_session=True,
-                                 stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL)
-                return
-        self.notify("term", "Nenhum terminal encontrado",
-                    "Instale gnome-console (kgx) ou defina $TERMINAL")
+        self.desktop.open_terminal(folder)
 
-    # -- integração com o desktop -----------------------------------------
     def set_clipboard(self, text: str) -> None:
-        """No Wayland, um serviço sem foco não consegue escrever no
-        clipboard; a extensão do Shell faz isso por nós."""
-        try:
-            _session().call_sync(
-                SHELL_BUS, SHELL_PATH, SHELL_IFACE, "SetClipboard",
-                GLib.Variant("(s)", (text,)), None,
-                Gio.DBusCallFlags.NONE, 1000, None)
-            return
-        except GLib.Error as exc:
-            log.info("clipboard via extensão indisponível: %s", exc.message)
-        if T.which("wl-copy"):
-            subprocess.run(["wl-copy"], input=text, text=True, check=False)
-            return
-        display = Gdk.Display.get_default()
-        if display:
-            display.get_clipboard().set(text)
+        self.desktop.set_clipboard(text)
 
     def reveal(self, uris) -> None:
-        try:
-            _session().call_sync(
-                "org.freedesktop.FileManager1", "/org/freedesktop/FileManager1",
-                "org.freedesktop.FileManager1", "ShowItems",
-                GLib.Variant("(ass)", (list(uris), "")), None,
-                Gio.DBusCallFlags.NONE, 3000, None)
-        except GLib.Error:
-            parent = Gio.File.new_for_uri(uris[0]).get_parent()
-            Gio.AppInfo.launch_default_for_uri(parent.get_uri(), None)
+        self.desktop.reveal(uris)
 
     def open_files(self, uris) -> None:
         for u in uris:
             if "://" not in u:
                 u = Gio.File.new_for_path(u).get_uri()
             try:
-                Gio.AppInfo.launch_default_for_uri(u, None)
-            except GLib.Error as exc:
-                log.warning("não abriu %s: %s", u, exc.message)
+                self.desktop.open_uri(u)
+            except (GLib.Error, OSError) as exc:
+                log.warning("não abriu %s: %s", u, exc)
 
     def notify(self, nid, title, body="", buttons=None, default=None,
                progress=False) -> None:
-        n = Gio.Notification.new(title)
-        if body:
-            n.set_body(body)
-        n.set_priority(Gio.NotificationPriority.LOW if progress
-                       else Gio.NotificationPriority.NORMAL)
-        for label, action, target in buttons or []:
-            if target is None:
-                n.add_button(label, action)
-            else:
-                n.add_button_with_target(label, action,
-                                         GLib.Variant("as", target))
-        if default:
-            n.set_default_action_and_target(default[0],
-                                            GLib.Variant("as", default[1]))
-        self.send_notification(nid, n)
+        self.desktop.notify(nid, title, body, buttons, default, progress)
 
     def _show_status(self) -> None:
         win = Gtk.Window(application=self, title="Mexerica",
@@ -705,7 +654,6 @@ class MexericaApp(Gtk.Application):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
                       margin_top=18, margin_bottom=18, margin_start=18,
                       margin_end=18)
-        ext = _extension_state()
         lines = [
             f"<b>Mexerica {__version__}</b> está rodando.",
             "",
@@ -714,7 +662,7 @@ class MexericaApp(Gtk.Application):
             "<b>Shift + Alt</b>: ferramentas  ·  <b>Shift + Ctrl</b>: ações",
             "Solte no miolo para cancelar.",
             "",
-            f"Extensão do GNOME Shell: <b>{ext}</b>",
+            self.desktop.status(),
         ]
         missing = [n for n in ("ffmpeg", "magick", "soffice", "pandoc",
                                "qpdf", "gs", "exiftool", "zbarimg",
@@ -730,32 +678,10 @@ class MexericaApp(Gtk.Application):
         win.present()
 
 
-def _session() -> Gio.DBusConnection:
-    return Gio.bus_get_sync(Gio.BusType.SESSION, None)
-
-
 def _short(path: Path) -> str:
     home = str(Path.home())
     s = str(path)
     return "~" + s[len(home):] if s.startswith(home) else s
-
-
-def _extension_state() -> str:
-    try:
-        reply = _session().call_sync(
-            "org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
-            "org.gnome.Shell.Extensions", "GetExtensionInfo",
-            GLib.Variant("(s)", (EXT_UUID,)), None,
-            Gio.DBusCallFlags.NONE, 1000, None)
-        info = reply.unpack()[0]
-        if not info:
-            return "não instalada"
-        state = int(info.get("state", 0))
-        return {1: "ativa", 2: "desativada", 3: "com erro",
-                4: "desatualizada", 6: "inicializada"}.get(state,
-                                                           f"estado {state}")
-    except GLib.Error:
-        return "GNOME Shell não encontrado"
 
 
 def main(argv=None) -> int:

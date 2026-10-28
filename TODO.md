@@ -64,9 +64,11 @@ de GNOME. O que muda em cada plataforma é perceber "arraste + modificador"
 e mostrar a roda por cima de tudo. Hoje só a extensão do GNOME Shell faz
 isso.
 
-- [ ] **Separar a interface por plataforma.** Interface comum: "começou um
-      arraste com arquivos", "modificadores mudaram", "mostrar a roda em
-      x, y" e "receber o drop". Cada plataforma ganha um backend próprio.
+- [x] **Separar a interface por plataforma.** `mexerica/desktop/`: cada
+      backend (`gnome.py`, `windows.py`) mostra a roda, cuida das janelas,
+      do clipboard, do "mostrar na pasta", do terminal e das notificações.
+      A regra de abrir/fechar a roda durante o arraste é pura
+      (`drag.py`) e testada.
 - [ ] **KDE Plasma (Wayland e X11):**
   - Primeiro passo: menus de serviço do Dolphin (`.desktop` em
     `kio/servicemenus`) chamando `mexerica run`, com as ferramentas por
@@ -85,19 +87,24 @@ isso.
       modificadores com XInput2/XQueryPointer durante o arraste e mostrar
       uma janela ARGB override-redirect como alvo do drop. Seria o backend
       mais simples depois do GNOME.
-- [ ] **Windows 10/11:**
-  - O arraste é OLE DoDragDrop. Detectar com um hook de mouse e teclado
-    (`SetWindowsHookEx` com `WH_MOUSE_LL` e `WH_KEYBOARD_LL`) e checar o
-    formato `CF_HDROP`.
-  - Mostrar uma janela topmost em camadas (`WS_EX_LAYERED`) com
-    `IDropTarget`. O vidro borrado pode usar Mica ou Acrylic
-    (`DwmSetWindowAttribute`).
-  - Decidir entre GTK 4 no Windows (MSYS2) e uma interface nativa (WinUI,
-    ou Python com pywin32).
-  - Dependências: ffmpeg, ImageMagick e qpdf via winget/scoop, e
-    `tools.py` resolvendo `.exe`.
-  - Empacotamento: instalador (MSIX ou Inno Setup) e um menu de contexto
-    do Explorer como alternativa sem roda.
+- [x] **Windows 11** (branch `feat/w11`): GTK 4 do MSYS2, a mesma roda e as
+      mesmas janelas. O serviço lê botão e modificadores a cada 30 ms
+      (`GetAsyncKeyState`) e reconhece o arraste pela janela da imagem de
+      arraste do shell (`SysDragImage`); a roda é uma janela topmost sobre
+      o monitor, e o drop chega pelo `GtkDropTarget` (OLE do GTK). Vidro
+      com `SetWindowCompositionAttribute` e cantos do DWM; notificações em
+      toast próprio; `install.ps1` com MSYS2 e winget.
+  - [ ] Validar numa sessão real: transparência e vidro com o renderer do
+        GTK, drop do Explorer, foco das janelas depois do drop,
+        multi-monitor com escalas diferentes.
+  - [ ] Arrastes sem a imagem do shell (apps que fazem DoDragDrop sem
+        `IDragSourceHelper`) não abrem a roda: talvez um hook
+        `WH_MOUSE_LL` + janela de sondagem quase invisível.
+  - [ ] Toasts da Central de Notificações (WinRT, com AppUserModelID no
+        atalho) no lugar do toast próprio.
+  - [ ] Empacotamento: instalador (MSIX ou Inno Setup) com o runtime do
+        MSYS2 embutido, e um menu de contexto do Explorer como
+        alternativa sem roda.
 - [ ] **Empacotamento por plataforma:** Flatpak (GNOME e KDE, mas a
       extensão do Shell fica fora do sandbox), AUR (já há PKGBUILD), .deb
       e .rpm.

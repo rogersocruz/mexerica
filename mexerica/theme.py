@@ -5,6 +5,8 @@ de 0 a 1 para o cairo; a versão em hex fica no comentário e no CSS.
 """
 from __future__ import annotations
 
+import sys
+
 
 def _hex(h: str, a: float = 1.0) -> tuple[float, float, float, float]:
     h = h.lstrip("#")
@@ -76,7 +78,7 @@ CORE_WEIGHT = 600
 ICON_PX = 16.0
 ICON_GAP = 3.0
 ICON_STROKE = 1.5
-FONT_FAMILY = "Inter, Cantarell, Sans"
+FONT_FAMILY = "Inter, Cantarell, Segoe UI, Sans"
 
 # Movimento (ms)
 ENTER_MS = 140
@@ -152,7 +154,9 @@ def human_size(n: int) -> str:
 # --------------------------------------------------------------------------
 # Janelas de edição
 # --------------------------------------------------------------------------
-WINDOW_RADIUS = 16
+# No Windows 11 o DWM arredonda a janela com 8 px e o vidro (borrão) segue
+# esse contorno, então o CSS usa o mesmo raio.
+WINDOW_RADIUS = 8 if sys.platform == "win32" else 16
 HANDLE_PX = 8                      # alças quadradas do recorte
 CROP_DIM = rgba255(60, 60, 60, 0.55)
 CROP_LINE = rgba255(255, 255, 255, 0.95)

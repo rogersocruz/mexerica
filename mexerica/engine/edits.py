@@ -195,7 +195,8 @@ def trim_op(base: Op, start: float, end: float, fast: bool,
                          "-avoid_negative_ts", "make_zero", str(b)))
         parts.append(b)
         lst = ctx.work / "lista.txt"
-        lst.write_text("".join(f"file '{p.name}'\n" for p in parts))
+        lst.write_text("".join(f"file '{p.name}'\n" for p in parts),
+                       encoding="utf-8")
         steps.append(_ff("-f", "concat", "-safe", "0", "-i", str(lst),
                          "-c", "copy", str(ctx.out)))
         return steps

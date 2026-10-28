@@ -288,5 +288,6 @@ def pdf_to_xopp(pdf: Path, out: Path) -> None:
         parts.append(f'<page width="{w:.6f}" height="{h:.6f}">\n{bg}\n'
                      f"<layer/>\n</page>\n")
     parts.append("</xournal>\n")
-    with gzip.open(out, "wt", encoding="utf-8") as fh:
+    # newline: no Windows o modo texto trocaria \n por \r\n
+    with gzip.open(out, "wt", encoding="utf-8", newline="\n") as fh:
         fh.write("".join(parts))

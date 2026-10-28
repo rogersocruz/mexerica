@@ -1,0 +1,4 @@
+@echo off
+rem Lancador do Mexerica: o pacote Python fica em @PKGDATADIR@
+set "PYTHONPATH=@PKGDATADIR@;%PYTHONPATH%"
+"@PYTHON@" -X utf8 -m mexerica %*
