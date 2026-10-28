@@ -9,13 +9,30 @@ Set-Location $PSScriptRoot
 $Root = Join-Path $env:LOCALAPPDATA 'Mexerica'
 $Bin = Join-Path $Root 'bin'
 
-Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe' OR Name = 'python.exe'" |
-    Where-Object { $_.CommandLine -match '-m mexerica( daemon)?\s*$' } |
-    ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
+# pede para sair pela janela da bandeja (o ícone some direito); quem não
+# sair em 3 s é encerrado
+Add-Type -Namespace Mexerica -Name Tray -MemberDefinition @'
+[DllImport("user32.dll", CharSet = CharSet.Unicode)]
+public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
+[DllImport("user32.dll")]
+public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr w, IntPtr l);
+'@
+$hwnd = [IntPtr]::Zero
+while (($hwnd = [Mexerica.Tray]::FindWindowEx([IntPtr]::Zero, $hwnd, 'MexericaTray', $null)) -ne [IntPtr]::Zero) {
+    [Mexerica.Tray]::PostMessage($hwnd, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+}
+$deadline = (Get-Date).AddSeconds(3)
+do {
+    $left = @(Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe' OR Name = 'python.exe'" |
+        Where-Object { $_.CommandLine -match '-m mexerica( daemon)?\s*$' })
+    if ($left) { Start-Sleep -Milliseconds 300 }
+} while ($left -and (Get-Date) -lt $deadline)
+$left | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName Terminate | Out-Null }
 
 Remove-Item -Force -ErrorAction SilentlyContinue `
     (Join-Path ([Environment]::GetFolderPath('Programs')) 'Mexerica.lnk'),
-    (Join-Path ([Environment]::GetFolderPath('Startup')) 'Mexerica (serviço).lnk')
+    (Join-Path ([Environment]::GetFolderPath('Startup')) 'Mexerica (serviço).lnk'),
+    (Join-Path $Root 'autostart-off.lnk')
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue `
     (Join-Path $Root 'app'), $Bin, (Join-Path $Root 'mexerica.ico')
 
@@ -27,5 +44,6 @@ if ($parts.Count -ne ($userPath -split ';' | Where-Object { $_ }).Count) {
 
 & (Join-Path $PSScriptRoot 'windows-hotkeys.ps1') -Restore
 
-Write-Host "Removido. Log e cache em $Root\cache (apague se quiser)."
+Write-Host "Removido. Log e cache em $Root\cache e configurações em"
+Write-Host "$env:APPDATA\Mexerica (apague se quiser)."
 Write-Host 'O MSYS2 e os conversores continuam instalados.'

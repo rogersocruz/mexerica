@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from .. import settings
 from . import formats as F
 from .ops import ALL, DIR, EACH, FILE, TEXT, Ctx, Op
 
@@ -59,8 +60,9 @@ def _hidden_tmp(folder: Path) -> Path:
 
 
 def _dest_dir(src: Path) -> tuple[Path, Path]:
-    """Pasta de destino e o temporário oculto dentro dela."""
-    parent = src.parent
+    """Pasta de destino (ao lado do original ou a escolhida nas
+    Configurações) e o temporário oculto dentro dela."""
+    parent = settings.output_dir() or src.parent
     if os.access(parent, os.W_OK):
         try:
             return parent, _hidden_tmp(parent)

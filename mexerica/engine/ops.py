@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from .. import settings
 from . import formats as F
 from . import office
 from . import tools as T
@@ -135,7 +136,7 @@ def _img_to(ext: str) -> Callable[[Ctx], list[Step]]:
         if ext in ("jpg", "bmp"):
             extra = ["-background", "white", "-alpha", "remove", "-alpha", "off"]
         if ext == "jpg":
-            extra += ["-quality", "92"]
+            extra += ["-quality", str(settings.get()["jpeg_quality"])]
         if ext == "ico":
             extra = ["-resize", "256x256>", "-define",
                      "icon:auto-resize=256,128,64,48,32,16"]
@@ -427,6 +428,15 @@ def _img_tool(*ops: str) -> Callable[[Ctx], list[Step]]:
     return lambda ctx: _magick(ctx, *ops, frame0=False)
 
 
+def _exiftool(work: Path, *args) -> list[str]:
+    """exiftool com os argumentos num arquivo UTF-8 (-@). No Windows a linha
+    de comando chega ao exiftool (Perl) em ANSI: um nome com acento sai em
+    cp1252 na saída, ou nem abre."""
+    argfile = work / "exiftool-args.txt"
+    argfile.write_text("".join(f"{a}\n" for a in args), encoding="utf-8")
+    return T.cmd("exiftool") + ["-charset", "filename=utf8", "-@", str(argfile)]
+
+
 def _strip(ctx: Ctx) -> list[Step]:
     kind = F.kind_of(ctx.src)
     if kind in F.MEDIA:
@@ -435,11 +445,9 @@ def _strip(ctx: Ctx) -> list[Step]:
     if kind == F.PDF:
         mid = ctx.work / "sem-meta.pdf"
         # exiftool só "esconde" (incremental update); qpdf reescreve o arquivo
-        return [T.cmd("exiftool") + ["-q", "-all:all=", "-o", str(mid),
-                                     str(ctx.src)],
+        return [_exiftool(ctx.work, "-q", "-all:all=", "-o", mid, ctx.src),
                 T.cmd("qpdf") + ["--linearize", str(mid), str(ctx.out)]]
-    return [T.cmd("exiftool") + ["-q", "-all=", "-o", str(ctx.out),
-                                 str(ctx.src)]]
+    return [_exiftool(ctx.work, "-q", "-all=", "-o", ctx.out, ctx.src)]
 
 
 def _strip_available() -> bool:
@@ -448,8 +456,9 @@ def _strip_available() -> bool:
 
 def _show_meta(ctx: Ctx) -> list[Step]:
     def run(c: Ctx) -> None:
-        out = subprocess.run(T.cmd("exiftool") + ["-G1", "-s", str(c.src)],
-                             capture_output=True, text=True).stdout
+        out = subprocess.run(_exiftool(c.work, "-G1", "-s", c.src),
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace").stdout
         c.text.append(f"── {c.src.name} ──\n{out.strip()}")
     return [run]
 
@@ -457,7 +466,8 @@ def _show_meta(ctx: Ctx) -> list[Step]:
 def _read_qr(ctx: Ctx) -> list[Step]:
     def run(c: Ctx) -> None:
         proc = subprocess.run(T.cmd("zbarimg") + ["--raw", "-q", str(c.src)],
-                              capture_output=True, text=True)
+                              capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
         if proc.returncode not in (0, 4) and not proc.stdout:
             raise RuntimeError(proc.stderr.strip() or "falha ao ler código")
         found = proc.stdout.strip()
@@ -717,8 +727,11 @@ assert len(BY_ID) == len(ALL_OPS), "ids de operação duplicados"
 _VIDEO_AUDIO_OK = {"to-mp3-audio", "to-m4a-audio", "to-wav-audio"}
 
 
-def options_for(paths: list[Path], group: str) -> list[Op]:
-    """Operações oferecidas para esse conjunto de arquivos numa roda."""
+def options_for(paths: list[Path], group: str,
+                shown: Callable[[Op], bool] | None = None) -> list[Op]:
+    """Operações oferecidas para esse conjunto de arquivos numa roda.
+    `shown` decide o que o usuário quer na roda (settings.shows); sem ele,
+    valem os padrões (in_wheel)."""
     paths = [Path(p) for p in paths]
     if not paths:
         return []
@@ -730,7 +743,7 @@ def options_for(paths: list[Path], group: str) -> list[Op]:
             continue
         if not kinds <= op.kinds:
             continue
-        if not op.in_wheel:
+        if not (shown(op) if shown else op.in_wheel):
             continue
         if op.mode == ALL and len(paths) < max(op.min_files, 1):
             continue

@@ -28,7 +28,16 @@ const GLib = {
     },
     source_remove(id) { timers[id - 1].alive = false; },
     Variant: class { constructor(sig, v) { this.sig = sig; this.v = v; } },
+    // configurações do serviço (~/.config/mexerica/settings.json)
+    get_user_config_dir: () => '/home/r/.config',
+    build_filenamev: parts => parts.join('/'),
+    file_get_contents(file) {
+        if (settingsJson === null || file !== '/home/r/.config/mexerica/settings.json')
+            throw new Error('sem arquivo');
+        return [true, new TextEncoder().encode(settingsJson)];
+    },
 };
+let settingsJson = null;
 function advance(ms) {
     const end = now + ms * 1000;
     for (;;) {
@@ -87,6 +96,37 @@ const Gio = {
         data: '', close() {},
         steal_as_bytes() { const d = this.data; return {toArray: () => new TextEncoder().encode(d)}; },
     })},
+    // o serviço entra e sai do barramento
+    BusType: {SESSION: 1}, BusNameWatcherFlags: {NONE: 0},
+    bus_watch_name(_t, name, _f, appeared, vanished) {
+        watcher = {name, appeared, vanished, alive: true};
+        return 7;
+    },
+    bus_unwatch_name(id) { if (id === 7) watcher.alive = false; },
+    ThemedIcon: {new: name => ({name})},
+};
+let watcher = null;
+// barra superior
+const statusArea = new Map();
+const PanelMenu = {Button: class {
+    constructor(_align, name) {
+        this.name = name; this.children = [];
+        this.menu = {items: [], addMenuItem(i) { this.items.push(i); }};
+    }
+    add_child(c) { this.children.push(c); }
+    destroy() {
+        this.destroyed = true;
+        for (const [k, v] of statusArea)
+            if (v === this) statusArea.delete(k);
+    }
+}};
+const PopupMenu = {
+    PopupMenuItem: class {
+        constructor(label) { this.label = label; this.handlers = []; }
+        connect(sig, fn) { this.handlers.push([sig, fn]); }
+        activate() { this.handlers.filter(([s]) => s === 'activate').forEach(([, fn]) => fn()); }
+    },
+    PopupSeparatorMenuItem: class { constructor() { this.separator = true; } },
 };
 // atores do compositor: só o necessário para o vidro
 class FakeActor {
@@ -112,10 +152,14 @@ const Shell = {BlurMode: {BACKGROUND: 1},
     BlurEffect: class { constructor(p) { Object.assign(this, p); } }};
 const Meta = {SelectionType: {SELECTION_DND: 2}};
 const St = {Clipboard: {get_default: () => ({set_text: (_t, s) => { clipboard = s; }})},
-    ClipboardType: {CLIPBOARD: 1}};
+    ClipboardType: {CLIPBOARD: 1},
+    Icon: class { constructor(p) { Object.assign(this, p); } }};
 const activated = [];
-const Main = {activateWindow: w => activated.push(w)};
-class Extension { constructor() { this.metadata = {version: 1}; } }
+const Main = {activateWindow: w => activated.push(w),
+    panel: {addToStatusArea: (role, button) => statusArea.set(role, button)}};
+class Extension {
+    constructor() { this.metadata = {version: 1}; this.uuid = 'mexerica@rogersocruz.github.io'; }
+}
 
 // ---------- carrega a extensão com os mocks ------------------------------
 const body = src
@@ -123,8 +167,8 @@ const body = src
     .replace('export default class', 'return class');
 // eslint-disable-next-line no-new-func
 const Ext = new Function('Clutter', 'Gio', 'GLib', 'Meta', 'Shell', 'St',
-    'Extension', 'Main', body)(
-    Clutter, Gio, GLib, Meta, Shell, St, Extension, Main);
+    'Extension', 'Main', 'PanelMenu', 'PopupMenu', body)(
+    Clutter, Gio, GLib, Meta, Shell, St, Extension, Main, PanelMenu, PopupMenu);
 
 const ext = new Ext();
 ext.enable();
@@ -174,6 +218,8 @@ const ovBlur = ov.actor.get_effect('mexerica-blur');
 assert.ok(ovBlur && ovBlur.mode === Shell.BlurMode.BACKGROUND,
     'tela atrás da roda fica borrada');
 assert.ok(ov.actor.eased['@effects.mexerica-blur.radius'] > 0, 'borrão entra animado');
+assert.equal(ov.actor.eased['@effects.mexerica-blur.brightness'], 0.72,
+    'sem configurações: escurece 28%');
 
 // ---------- 4. + Alt -> ferramentas, mesmo centro ------------------------
 pointer = [2700, 600, SHIFT | ALT];
@@ -237,6 +283,36 @@ assert.ok(glass.destroyed && late.count() === 0, 'janela fechada: vidro sai');
 // ---------- 10. clipboard via D-Bus e disable limpo -----------------------
 ext.SetClipboard('/home/r/foto.png');
 assert.equal(clipboard, '/home/r/foto.png');
+
+// ---------- 12. ícone na barra superior enquanto o serviço roda -----------
+assert.equal(watcher.name, 'io.github.rogersocruz.Mexerica');
+assert.equal(statusArea.size, 0, 'serviço fora do ar: sem ícone');
+watcher.appeared();
+const button = statusArea.get('mexerica@rogersocruz.github.io');
+assert.ok(button, 'serviço no ar: ícone na barra');
+assert.equal(button.children[0].gicon.name, 'io.github.rogersocruz.Mexerica');
+assert.deepEqual(button.menu.items.map(i => i.label ?? '—'),
+    ['Configurações…', 'Abrir o log', '—', 'Sair da Mexerica']);
+button.menu.items[0].activate();
+assert.equal(calls.at(-1).action, 'settings', 'abre as Configurações no serviço');
+button.menu.items[3].activate();
+assert.equal(calls.at(-1).action, 'quit');
+watcher.vanished();
+assert.ok(button.destroyed && statusArea.size === 0, 'serviço saiu: ícone some');
+watcher.appeared();
+
+// ---------- 13. escurecer vem das Configurações ---------------------------
+settingsJson = '{"dim": 40, "style": "oceano"}';
+const ov2 = fakeWindow('mexerica-overlay');
+display.emit('window-created', ov2);
+assert.ok(Math.abs(ov2.actor.eased['@effects.mexerica-blur.brightness'] - 0.6) < 1e-9);
+ov2.emit('unmanaged');
+
+// ---------- 14. Flutuar é redonda: acima, mas sem vidro retangular --------
+const bubble = fakeWindow('Mexerica — Flutuar · foto.png');
+display.emit('window-created', bubble);
+assert.ok(bubble.above && activated.includes(bubble));
+assert.equal(bubble.actor.children.length, 0, 'sem borrão atrás da bolha');
 // ---------- 11. disable tira todo o vidro ---------------------------------
 const ed = fakeWindow('Editar — foto.png');
 display.emit('window-created', ed);
@@ -248,5 +324,6 @@ assert.equal(ed.actor.children.length, 0, 'vidro das janelas removido');
 assert.equal(ov.actor.get_effect('mexerica-blur'), null, 'efeito do overlay removido');
 assert.equal(ed.count(), 0);
 assert.equal(ov.count(), 0, 'sinais da janela da roda soltos');
+assert.ok(!watcher.alive && statusArea.size === 0, 'para de observar e tira o ícone');
 
-console.log('extensão: 11 cenários ok');
+console.log('extensão: 14 cenários ok');

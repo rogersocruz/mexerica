@@ -11,8 +11,9 @@ notificações):
            pela API Win32 (windows.py, win32.py); a regra de quando abrir
            e fechar a roda é a mesma da extensão (drag.py)
 
-Todo backend tem: start, show_overlay, wheel_center, overlay_dim,
-dialog_parent, set_clipboard, reveal, open_uri, open_terminal, notify,
+Todo backend tem: start, stop, show_overlay, wheel_center, overlay_dim,
+dialog_parent, drag_source, file_icon, display_name, autostart,
+set_autostart, set_clipboard, reveal, open_uri, open_terminal, notify,
 withdraw e status.
 """
 from __future__ import annotations
@@ -35,16 +36,23 @@ def setup_process() -> None:
     path = os.environ.get("PATH", "")
     if bindir.lower() not in path.lower().split(os.pathsep):
         os.environ["PATH"] = bindir + os.pathsep + path
-    _no_console_windows()
+    _subprocess_defaults()
 
 
-def _no_console_windows() -> None:
-    """O serviço roda no pythonw.exe, sem console: cada ffmpeg ou magick
-    abriria uma janela preta. Todo subprocesso nasce sem janela, a não ser
-    que peça outra coisa (o terminal pede CREATE_NEW_CONSOLE)."""
+def _subprocess_defaults() -> None:
+    """Dois padrões para todo subprocesso no Windows:
+    - sem janela: o serviço roda no pythonw.exe, sem console, e cada ffmpeg
+      ou magick abriria uma janela preta (o terminal pede
+      CREATE_NEW_CONSOLE);
+    - saída de texto que não é UTF-8 (programa que escreve em ANSI) vira "?"
+      em vez de sumir: a thread que lê a saída morre calada e o stdout
+      chegaria None."""
     class Popen(subprocess.Popen):
         def __init__(self, *args, **kwargs):
             kwargs.setdefault("creationflags", subprocess.CREATE_NO_WINDOW)
+            if kwargs.get("text") or kwargs.get("universal_newlines") \
+                    or kwargs.get("encoding"):
+                kwargs.setdefault("errors", "replace")
             super().__init__(*args, **kwargs)
     subprocess.Popen = Popen
 
