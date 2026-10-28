@@ -321,6 +321,11 @@ button.mx-float-close {
   border: 2px solid white; box-shadow: 0 1px 4px alpha(black, 0.25);
 }
 button.mx-float-close:hover { opacity: 0.88; }
+.mx-float-move {
+  background: alpha(%(top)s, 0.97); border-radius: 999px;
+  border: 2px solid white; box-shadow: 0 1px 4px alpha(black, 0.25);
+}
+.mx-float-move:hover { box-shadow: 0 0 0 2px %(orange)s, 0 1px 4px alpha(black, 0.25); }
 .mx-float-badge {
   background: %(orange)s; color: white; border-radius: 999px;
   min-width: 18px; padding: 1px 5px; font-weight: 700; font-size: 11px;
