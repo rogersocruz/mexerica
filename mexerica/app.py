@@ -453,6 +453,8 @@ class MexericaApp(Gtk.Application):
             [str(cache_dir() / "mexerica.log")]))
         add("quit", None, lambda *_: self.quit())
         self.desktop.start()
+        # a primeira roda não espera pelas sondagens lentas (magick)
+        threading.Thread(target=T.warm_up, daemon=True).start()
         log.info("Mexerica %s iniciado (pid %s, %s)", __version__,
                  os.getpid(), self.desktop.name)
 

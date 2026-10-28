@@ -48,7 +48,8 @@ WNDENUMPROC = ctypes.WINFUNCTYPE(W.BOOL, W.HWND, W.LPARAM)
 GetAsyncKeyState = _fn(user32, "GetAsyncKeyState", ctypes.c_short, ctypes.c_int)
 GetSystemMetrics = _fn(user32, "GetSystemMetrics", ctypes.c_int, ctypes.c_int)
 GetCursorPos = _fn(user32, "GetCursorPos", W.BOOL, ctypes.POINTER(W.POINT))
-FindWindowW = _fn(user32, "FindWindowW", W.HWND, W.LPCWSTR, W.LPCWSTR)
+FindWindowExW = _fn(user32, "FindWindowExW", W.HWND, W.HWND, W.HWND,
+                    W.LPCWSTR, W.LPCWSTR)
 IsWindowVisible = _fn(user32, "IsWindowVisible", W.BOOL, W.HWND)
 MonitorFromPoint = _fn(user32, "MonitorFromPoint", W.HMONITOR, W.POINT,
                        W.DWORD)
@@ -167,9 +168,13 @@ def pointer() -> tuple[int, int]:
 
 
 def drag_image() -> int:
-    """HWND da imagem de arraste do shell, se houver um arraste agora."""
-    hwnd = FindWindowW(DRAG_IMAGE_CLASS, None)
-    return hwnd if hwnd and IsWindowVisible(hwnd) else 0
+    """HWND da imagem de arraste do shell, se houver uma visível agora
+    (pode sobrar uma escondida de um arraste anterior)."""
+    hwnd = None
+    while True:
+        hwnd = FindWindowExW(None, hwnd, DRAG_IMAGE_CLASS, None)
+        if not hwnd or IsWindowVisible(hwnd):
+            return hwnd or 0
 
 # --------------------------------------------------------------------------
 # Monitores e janelas

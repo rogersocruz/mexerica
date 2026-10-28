@@ -13,10 +13,14 @@
   Ghostscript, librsvg, zbar e libarchive pelo MSYS2; Pandoc, ExifTool e
   LibreOffice pelo winget. Sem isso, a roda mostra só o que já existir.
 
+.PARAMETER AppOnly
+  Só copia o código para %LOCALAPPDATA%\Mexerica e reinicia o serviço,
+  sem mexer no MSYS2 (para atualizar depois de um git pull).
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\install.ps1 -Converters
 #>
-param([switch]$Converters)
+param([switch]$Converters, [switch]$AppOnly)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -68,43 +72,46 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wP
 }
 
 # --- MSYS2 ------------------------------------------------------------------
-if (-not (Test-Path (Join-Path $Msys 'usr\bin\bash.exe'))) {
-    if (-not $Winget) {
-        throw "MSYS2 não encontrado em $Msys e winget indisponível. Instale de https://www.msys2.org e rode de novo."
-    }
-    Write-Host 'Instalando o MSYS2 (winget)...'
-    & $Winget install --id MSYS2.MSYS2 -e --accept-package-agreements --accept-source-agreements
+# (com -AppOnly: só copia o app e reinicia o serviço)
+if (-not $AppOnly) {
     if (-not (Test-Path (Join-Path $Msys 'usr\bin\bash.exe'))) {
-        throw "MSYS2 não ficou em $Msys. Defina MSYS2_ROOT se instalou em outro lugar."
-    }
-}
-
-Write-Host 'Atualizando o MSYS2...'
-# a primeira atualização pode trocar só o núcleo e encerrar o pacman
-Invoke-Pacman @('-Syu', '--noconfirm') | Out-Null
-Invoke-Pacman @('-Syu', '--noconfirm') | Out-Null
-
-$required = 'python', 'gtk4', 'python-gobject', 'python-cairo', 'adwaita-icon-theme' |
-    ForEach-Object { $Pkg + $_ }
-if (-not (Invoke-Pacman (@('-S', '--needed', '--noconfirm') + $required))) {
-    throw 'O pacman não instalou o GTK 4 e o PyGObject.'
-}
-
-if ($Converters) {
-    # um por vez: se algum faltar no repositório, os outros entram
-    foreach ($name in 'ffmpeg', 'imagemagick', 'libheif', 'librsvg', 'poppler',
-                      'qpdf', 'ghostscript', 'zbar', 'libarchive') {
-        if (-not (Invoke-Pacman @('-S', '--needed', '--noconfirm', ($Pkg + $name)))) {
-            Write-Warning "pacman: $name não foi instalado"
+        if (-not $Winget) {
+            throw "MSYS2 não encontrado em $Msys e winget indisponível. Instale de https://www.msys2.org e rode de novo."
+        }
+        Write-Host 'Instalando o MSYS2 (winget)...'
+        & $Winget install --id MSYS2.MSYS2 -e --accept-package-agreements --accept-source-agreements
+        if (-not (Test-Path (Join-Path $Msys 'usr\bin\bash.exe'))) {
+            throw "MSYS2 não ficou em $Msys. Defina MSYS2_ROOT se instalou em outro lugar."
         }
     }
-    if ($Winget) {
-        foreach ($id in 'JohnMacFarlane.Pandoc', 'OliverBetz.ExifTool',
-                        'TheDocumentFoundation.LibreOffice') {
-            & $Winget install --id $id -e --accept-package-agreements --accept-source-agreements
+
+    Write-Host 'Atualizando o MSYS2...'
+    # a primeira atualização pode trocar só o núcleo e encerrar o pacman
+    Invoke-Pacman @('-Syu', '--noconfirm') | Out-Null
+    Invoke-Pacman @('-Syu', '--noconfirm') | Out-Null
+
+    $required = 'python', 'gtk4', 'python-gobject', 'python-cairo', 'adwaita-icon-theme' |
+        ForEach-Object { $Pkg + $_ }
+    if (-not (Invoke-Pacman (@('-S', '--needed', '--noconfirm') + $required))) {
+        throw 'O pacman não instalou o GTK 4 e o PyGObject.'
+    }
+
+    if ($Converters) {
+        # um por vez: se algum faltar no repositório, os outros entram
+        foreach ($name in 'ffmpeg', 'imagemagick', 'libheif', 'librsvg', 'poppler',
+                          'qpdf', 'ghostscript', 'zbar', 'libarchive') {
+            if (-not (Invoke-Pacman @('-S', '--needed', '--noconfirm', ($Pkg + $name)))) {
+                Write-Warning "pacman: $name não foi instalado"
+            }
         }
-    } else {
-        Write-Warning 'winget não encontrado: instale Pandoc, ExifTool e LibreOffice à mão.'
+        if ($Winget) {
+            foreach ($id in 'JohnMacFarlane.Pandoc', 'OliverBetz.ExifTool',
+                            'TheDocumentFoundation.LibreOffice') {
+                & $Winget install --id $id -e --accept-package-agreements --accept-source-agreements
+            }
+        } else {
+            Write-Warning 'winget não encontrado: instale Pandoc, ExifTool e LibreOffice à mão.'
+        }
     }
 }
 

@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .. import cache_dir
+
 WINDOWS = sys.platform == "win32"
 
 
@@ -29,8 +31,10 @@ def _search_path() -> str | None:
         base = os.environ.get(var)
         if not base:
             continue
+        # (o winget instala alguns por usuário, em LOCALAPPDATA\Programs)
         dirs += [os.path.join(base, sub) for sub in (
-            "LibreOffice\\program", "Pandoc", "ExifTool", "Xournal++\\bin")]
+            "LibreOffice\\program", "Pandoc", "ExifTool", "Programs\\ExifTool",
+            "Xournal++\\bin")]
         dirs += sorted(glob.glob(os.path.join(base, "gs", "gs*", "bin")),
                        reverse=True)
         dirs += sorted(glob.glob(os.path.join(base, "ImageMagick*")),
@@ -113,25 +117,53 @@ def cmd(name: str) -> list[str]:
     return list(base)
 
 
+# Se a listagem falhar, a roda ainda oferece o que todo ImageMagick escreve.
+MAGICK_BASIC = frozenset({"jpeg", "png", "gif", "bmp", "tiff", "ico"})
+
+
 @functools.lru_cache(maxsize=None)
 def magick_writable() -> frozenset[str]:
     """Formatos que o ImageMagick instalado consegue ESCREVER (ex.: HEIC
-    depende do libheif, AVIF/JXL de delegates próprios)."""
+    depende do libheif, AVIF/JXL de delegates próprios).
+
+    `-list format` carrega todos os módulos do ImageMagick: no Windows leva
+    uns 10 s. O resultado fica em disco e só é refeito quando o magick ou a
+    pasta dele mudam (instalar o libheif, por exemplo)."""
     base = resolve("magick")
     if base is None:
         return frozenset()
-    args = base + ["-list", "format"]
     try:
-        out = subprocess.run(args, capture_output=True, text=True,
-                             timeout=10).stdout
+        exe = Path(base[0])
+        sig = f"{exe}|{exe.stat().st_mtime_ns}|{exe.parent.stat().st_mtime_ns}"
+    except OSError:
+        sig = None
+    cache = cache_dir() / "magick-formats.txt"
+    try:
+        lines = cache.read_text(encoding="utf-8").splitlines()
+        if sig and lines and lines[0] == sig:
+            return frozenset(lines[1:])
+    except OSError:
+        pass
+    try:
+        out = subprocess.run(base + ["-list", "format"], capture_output=True,
+                             text=True, timeout=60).stdout
     except (OSError, subprocess.SubprocessError):
-        return frozenset()
+        return MAGICK_BASIC
     fmts = set()
     for line in out.splitlines():
         parts = line.split()
         # Linha típica: "   HEIC* HEIC      rw+   High Efficiency ..."
         if len(parts) >= 3 and len(parts[2]) >= 2 and parts[2][1] == "w":
             fmts.add(parts[0].rstrip("*").lower())
+    if not fmts:
+        return MAGICK_BASIC
+    if sig:
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text("\n".join([sig, *sorted(fmts)]),
+                             encoding="utf-8")
+        except OSError:
+            pass
     return frozenset(fmts)
 
 
@@ -155,3 +187,10 @@ def ffmpeg_encoders() -> frozenset[str]:
 
 def has_encoder(name: str) -> bool:
     return name in ffmpeg_encoders()
+
+
+def warm_up() -> None:
+    """Faz as sondagens lentas antes da primeira roda (o serviço chama numa
+    thread ao iniciar)."""
+    magick_writable()
+    ffmpeg_encoders()

@@ -12,11 +12,12 @@ P = (500, 400)
 
 
 def run(steps):
-    """steps: (ms, arrastando, modo, ponteiro) -> ações não vazias."""
+    """steps: (ms, arrastando, modo, ponteiro) -> ações não vazias.
+    "Arrastando" = botão pressionado e imagem de arraste visível."""
     w = D.DragWatch()
     out = []
     for now, dragging, mode, *pt in steps:
-        act = w.step(dragging, mode, pt[0] if pt else P, now)
+        act = w.step(dragging, dragging, mode, pt[0] if pt else P, now)
         if act:
             out.append((now, act))
     return w, out
@@ -69,6 +70,26 @@ def test_drag_without_files_gives_up_until_the_next_drag():
     assert w.probe(False, 100) is None                 # ainda esperando
     assert w.probe(True, D.PROBE_MS + 1) is None       # com arquivos fica
     assert w.probe(False, D.PROBE_MS) == (D.HIDE,)
-    assert w.step(True, CONVERT, P, 900) is None       # desistiu deste
-    assert w.step(False, None, P, 930) is None
-    assert w.step(True, CONVERT, P, 2000) == (D.SHOW, CONVERT, P)
+    assert w.step(True, True, CONVERT, P, 900) is None   # desistiu deste
+    assert w.step(False, False, None, P, 930) is None
+    assert w.step(True, True, CONVERT, P, 2000) == (D.SHOW, CONVERT, P)
+
+
+def test_drag_image_hidden_over_the_wheel_keeps_it_open():
+    """Sobre a roda o Explorer esconde a imagem de arraste. Antes, isso
+    parecia o fim do arraste: a roda fechava, a imagem voltava e ela
+    reabria, piscando."""
+    w = D.DragWatch()
+    acts = [w.step(True, True, CONVERT, P, 0)]
+    acts += [w.step(True, False, CONVERT, P, t) for t in range(30, 3000, 30)]
+    assert [a for a in acts if a] == [(D.SHOW, CONVERT, P)]
+    assert w.step(False, False, None, P, 3000) is None   # soltou: drop
+    assert w.step(False, False, None, P, 3400) == (D.HIDE,)
+
+
+def test_shift_drag_without_drag_image_is_not_a_file_drag():
+    """Shift + arrastar para selecionar texto: botão pressionado, sem a
+    imagem de arraste do shell."""
+    w = D.DragWatch()
+    acts = [w.step(True, False, CONVERT, P, t) for t in range(0, 900, 30)]
+    assert not any(acts)

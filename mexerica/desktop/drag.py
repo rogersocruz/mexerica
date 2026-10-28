@@ -1,9 +1,14 @@
 """Quando mostrar e esconder a roda durante um arraste.
 
 É a regra da extensão do GNOME Shell (`_tick`), separada da leitura do
-sistema para dar para testar: a cada passo o backend informa se há um
-arraste em andamento, a roda pedida pelos modificadores, o ponteiro e o
-relógio, e recebe o que fazer. Puro Python.
+sistema para dar para testar: a cada passo o backend informa o botão do
+mouse, se a imagem de arraste do shell está visível, a roda pedida pelos
+modificadores, o ponteiro e o relógio, e recebe o que fazer. Puro Python.
+
+A imagem de arraste só marca o começo: quem a mostra é o alvo do drop, e
+sobre a própria roda (GTK) ela some. Daí em diante o arraste dura enquanto
+o botão estiver pressionado; senão a roda fecharia ao abrir e reabriria
+ao fechar, piscando.
 """
 from __future__ import annotations
 
@@ -38,10 +43,11 @@ class DragWatch:
         self.ended_at = 0.0
         self.given_up = False
 
-    def step(self, dragging: bool, mode: str | None,
+    def step(self, button: bool, image: bool, mode: str | None,
              pointer: tuple[int, int], now: float):
         """Um passo do laço (`now` em ms). Devolve (SHOW, modo, âncora),
         (HIDE,) ou None."""
+        dragging = button and (self.dragging or image)
         if not dragging:
             if self.dragging:                     # o arraste terminou
                 self.dragging = False

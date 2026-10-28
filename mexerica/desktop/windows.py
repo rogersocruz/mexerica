@@ -83,13 +83,15 @@ class WindowsDesktop:
 
     def _poll(self) -> bool:
         down = W.primary_button_down()
-        dragging = down and bool(W.drag_image())
-        mode = D.mode_for(*W.modifiers()) if dragging else None
+        image = down and not self.watch.dragging and bool(W.drag_image())
+        mode = D.mode_for(*W.modifiers()) if down else None
         now = time.monotonic() * 1000
-        act = self.watch.step(dragging, mode, W.pointer(), now)
+        act = self.watch.step(down, image, mode, W.pointer(), now)
         if act is None and self.watch.shown:
             ov = self.app.overlay
             act = self.watch.probe(bool(ov and ov.paths), now)
+            if act:
+                log.info("arraste sem arquivos para a roda; desistindo")
         if act and act[0] == D.SHOW:
             self._anchor = act[2]
             self.app.show_wheel(act[1], [])

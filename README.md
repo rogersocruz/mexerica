@@ -283,11 +283,12 @@ Environment).
   - `~/.cache/mexerica/mexerica.log` (serviço);
   - `journalctl --user -f -o cat /usr/bin/gnome-shell` (extensão).
 
-  No Windows foram testados o motor e a CLI (com o `tar.exe` do sistema),
-  a regra do arraste (`tests/test_drag.py`) e as chamadas Win32 que não
-  dependem do GTK (monitor, clipboard, temporário oculto). **A roda e as
-  janelas em GTK no Windows ainda não rodaram numa sessão real.** O log fica
-  em `%LOCALAPPDATA%\Mexerica\cache\mexerica.log`.
+  No Windows, a suíte inteira passa no Python do MSYS2 com os conversores
+  reais, além da regra do arraste (`tests/test_drag.py`) e das chamadas
+  Win32 que não dependem do GTK (monitor, clipboard, temporário oculto). A
+  roda e as janelas estão sendo validadas numa sessão real. O log fica em
+  `%LOCALAPPDATA%\Mexerica\cache\mexerica.log`; depois de um `git pull`,
+  `.\install.ps1 -AppOnly` atualiza só o app.
 
 ## Desenvolvimento
 

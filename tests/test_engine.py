@@ -128,7 +128,8 @@ def test_options_multi_only_ops(png, d):
 def test_mixed_kinds_intersection(png, mp4):
     assert options_for([png, mp4], CONVERT) == []
     ids = [o.id for o in options_for([png, mp4], TOOLS)]
-    assert "strip-meta" in ids and "img-compress" not in ids
+    assert "img-compress" not in ids
+    assert ("strip-meta" in ids) == T.has("exiftool")
     assert any(o.id == "act-copy-path"
                for o in options_for([png, mp4], ACTIONS))
 
