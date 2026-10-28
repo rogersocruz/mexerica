@@ -45,7 +45,7 @@ def mp4(d):
     if not T.has("ffmpeg"):
         pytest.skip("sem ffmpeg")
     p = d / "clip.mp4"
-    sh("ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i",
+    sh(*T.cmd("ffmpeg"), "-loglevel", "error", "-f", "lavfi", "-i",
        "testsrc=d=2:s=320x240", "-f", "lavfi", "-i", "sine=d=2", "-shortest",
        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(p))
     return p
@@ -56,7 +56,8 @@ def wav(d):
     if not T.has("ffmpeg"):
         pytest.skip("sem ffmpeg")
     p = d / "som.wav"
-    sh("ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "sine=d=2", str(p))
+    sh(*T.cmd("ffmpeg"), "-loglevel", "error", "-f", "lavfi", "-i", "sine=d=2",
+       str(p))
     return p
 
 
@@ -65,7 +66,7 @@ def pdf(d):
     if not T.has("gs"):
         pytest.skip("sem ghostscript")
     p = d / "doc.pdf"
-    sh("gs", "-q", "-sDEVICE=pdfwrite", "-o", str(p), "-c",
+    sh(*T.cmd("gs"), "-q", "-sDEVICE=pdfwrite", "-o", str(p), "-c",
        "/Helvetica findfont 24 scalefont setfont 72 700 moveto (Ola) show "
        "showpage 72 700 moveto (Pagina 2) show showpage")
     return p
@@ -217,7 +218,7 @@ def test_single_page_dir_collapses_to_file(pdf, d):
 
 @need("exiftool", "qpdf")
 def test_strip_and_show_meta(png, pdf):
-    sh("exiftool", "-q", "-overwrite_original", "-Artist=Fulano", str(png))
+    sh(*T.cmd("exiftool"), "-q", "-overwrite_original", "-Artist=Fulano", str(png))
     shown = run(BY_ID["show-meta"], [png])
     assert "Fulano" in shown.texts[0]
     clean = _one(run(BY_ID["strip-meta"], [png]))
@@ -227,7 +228,9 @@ def test_strip_and_show_meta(png, pdf):
 
 
 @need("bsdtar")
-def test_archives(png, d):
+def test_archives(d):
+    png = d / "foto.png"
+    png.write_bytes(b"qualquer coisa")
     folder = d / "pasta"
     folder.mkdir()
     shutil.copy(png, folder / "a.png")
@@ -361,13 +364,14 @@ def test_xopp_roundtrip(pdf, d):
                       'color="#000000ff">Nota manuscrita</text></layer>')
     xo.write_bytes(gzip.compress(xml.encode()))
     out = _one(run(BY_ID["xopp-to-pdf"], [xo]))
-    text = subprocess.run(["pdftotext", str(out), "-"], capture_output=True,
-                          text=True).stdout
+    text = subprocess.run(T.cmd("pdftotext") + [str(out), "-"],
+                          capture_output=True, text=True).stdout
     assert "Ola" in text and "Pagina 2" in text and "Nota manuscrita" in text
 
 
 def test_xopp_solid_pages(d):
     import gzip
+    pytest.importorskip("cairo")
     from mexerica.engine import xopp
     x = d / "notas.xopp"
     x.write_bytes(gzip.compress(

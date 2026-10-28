@@ -12,6 +12,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,13 +49,26 @@ def unique_path(path: Path) -> Path:
         n += 1
 
 
-def _dest_dir(src: Path) -> Path:
+def _hidden_tmp(folder: Path) -> Path:
+    work = Path(tempfile.mkdtemp(prefix=".mexerica-", dir=folder))
+    if sys.platform == "win32":
+        # no Windows o ponto no nome não esconde a pasta
+        import ctypes
+        ctypes.windll.kernel32.SetFileAttributesW(str(work), 0x2)  # HIDDEN
+    return work
+
+
+def _dest_dir(src: Path) -> tuple[Path, Path]:
+    """Pasta de destino e o temporário oculto dentro dela."""
     parent = src.parent
     if os.access(parent, os.W_OK):
-        return parent
+        try:
+            return parent, _hidden_tmp(parent)
+        except OSError:
+            pass    # no Windows o os.access não olha as permissões (ACL)
     fallback = Path.home() / "Downloads"
     fallback.mkdir(exist_ok=True)
-    return fallback
+    return fallback, _hidden_tmp(fallback)
 
 
 def _run_step(step, ctx: Ctx) -> None:
@@ -70,8 +84,7 @@ def _run_step(step, ctx: Ctx) -> None:
 
 
 def _run_one(op: Op, src: Path, srcs: list[Path], res: Result) -> None:
-    dest_dir = _dest_dir(src)
-    work = Path(tempfile.mkdtemp(prefix=".mexerica-", dir=dest_dir))
+    dest_dir, work = _dest_dir(src)
     try:
         final = unique_path(dest_dir / op.output_name(src))
         tmp_out = work / ("saida" if op.result == DIR else
