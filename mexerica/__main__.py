@@ -48,11 +48,13 @@ def cmd_list(args) -> int:
 
 def cmd_run(args) -> int:
     from .engine import BY_ID, run
-    from .engine.ops import ACTION
+    from .engine.ops import ACTION, EDITOR
     op = BY_ID.get(args.op)
     if op is None:
         print(f"operação desconhecida: {args.op}", file=sys.stderr)
         return 2
+    if op.mode == EDITOR:
+        return _open_editor(op.id, args.files)
     if op.mode == ACTION:
         print("ações de interface só funcionam pela roda", file=sys.stderr)
         return 2
@@ -64,6 +66,25 @@ def cmd_run(args) -> int:
     for src, err in res.errors:
         print(f"ERRO {src}: {err}", file=sys.stderr)
     return 0 if res.ok else 1
+
+
+def _open_editor(op_id: str, files: list[str]) -> int:
+    """Operações com janela: pede ao serviço (já rodando) para abri-la."""
+    from gi.repository import Gio, GLib
+    from . import APP_ID
+    paths = [str(Path(f).resolve()) for f in files]
+    try:
+        Gio.bus_get_sync(Gio.BusType.SESSION, None).call_sync(
+            APP_ID, "/" + APP_ID.replace(".", "/"),
+            "org.freedesktop.Application", "ActivateAction",
+            GLib.Variant("(sava{sv})", (
+                "open-editor",
+                [GLib.Variant("(sas)", (op_id, paths))], {})),
+            None, Gio.DBusCallFlags.NONE, 5000, None)
+    except GLib.Error as exc:
+        print(f"serviço não respondeu: {exc.message}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def cmd_doctor(_args) -> int:

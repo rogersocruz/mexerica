@@ -27,6 +27,7 @@ CONVERT, TOOLS, ACTIONS = "convert", "tools", "actions"
 EACH = "each"      # um resultado por arquivo de entrada
 ALL = "all"        # todos os arquivos viram um resultado (juntar PDFs...)
 ACTION = "action"  # tratada pelo app (precisa de GUI/clipboard)
+EDITOR = "editor"  # abre uma janela que coleta parâmetros (engine/edits.py)
 
 # Tipo do resultado
 FILE, DIR, TEXT = "file", "dir", "text"
@@ -61,6 +62,8 @@ class Op:
     skip_exts: frozenset[str] = frozenset()   # não oferecer se a entrada já é isso
     available: Callable[[], bool] | None = None
     hint: str = ""                    # descrição curta (tooltip/CLI)
+    max_files: int = 0                # 0 = sem limite
+    in_wheel: bool = True             # False: só pela CLI (preset antigo)
 
     def is_available(self) -> bool:
         if not T.has(*self.needs):
@@ -533,7 +536,25 @@ def _audio_same(*af: str) -> Callable[[Ctx], list[Step]]:
     return build
 
 
+_IMG1 = frozenset({F.IMAGE})
+
 TOOL_OPS = [
+    # janelas primeiro: ficam no topo da roda
+    Op("img-edit", "Editar…", TOOLS, _IMG1, mode=EDITOR, max_files=1,
+       needs=("magick",), hint="Recortar, girar, cor, tamanho"),
+    Op("img-crop", "Recortar…", TOOLS, _IMG1, mode=EDITOR, max_files=1,
+       needs=("magick",), hint="Recorte com proporção"),
+    Op("img-size", "Tamanho…", TOOLS, _IMG1, mode=EDITOR,
+       needs=("magick",), hint="Dimensões, qualidade e peso"),
+    Op("vid-trim", "Cortar…", TOOLS, frozenset({F.VIDEO}), mode=EDITOR,
+       max_files=1, needs=("ffmpeg", "ffprobe"), hint="Escolher o trecho"),
+    Op("vid-size", "Tamanho…", TOOLS, frozenset({F.VIDEO}), mode=EDITOR,
+       needs=("ffmpeg", "ffprobe"), hint="Caber em X MB, resolução"),
+    Op("aud-trim", "Cortar…", TOOLS, frozenset({F.AUDIO}), mode=EDITOR,
+       max_files=1, needs=("ffmpeg", "ffprobe"), hint="Escolher o trecho"),
+    Op("pdf-pages", "Páginas…", TOOLS, frozenset({F.PDF}), mode=EDITOR,
+       max_files=1, needs=("qpdf", "pdftoppm"),
+       hint="Extrair, apagar ou girar páginas"),
     # imagens
     Op("img-compress", "Comprimir", TOOLS, frozenset({F.IMAGE}),
        _img_tool("-strip", "-quality", "75"), suffix="-comprimido",
@@ -541,16 +562,19 @@ TOOL_OPS = [
     Op("img-1mb", "≤ 1 MB", TOOLS, frozenset({F.IMAGE}),
        lambda c: _magick(c, "-strip", "-background", "white", "-alpha",
                          "remove", "-define", "jpeg:extent=1000KB"),
-       ext="jpg", suffix="-1mb", needs=("magick",), hint="JPG de até 1 MB"),
+       ext="jpg", suffix="-1mb", needs=("magick",), hint="JPG de até 1 MB",
+       in_wheel=False),
     Op("img-half", "50%", TOOLS, frozenset({F.IMAGE}),
        _img_tool("-resize", "50%"), suffix="-50", needs=("magick",),
-       hint="Reduz pela metade"),
+       hint="Reduz pela metade", in_wheel=False),
     Op("img-rotate", "Girar 90°", TOOLS, frozenset({F.IMAGE}),
        _img_tool("-rotate", "90"), suffix="-girada", needs=("magick",)),
     Op("img-flip", "Espelhar", TOOLS, frozenset({F.IMAGE}),
-       _img_tool("-flop"), suffix="-espelhada", needs=("magick",)),
+       _img_tool("-flop"), suffix="-espelhada", needs=("magick",),
+       in_wheel=False),
     Op("img-gray", "P&B", TOOLS, frozenset({F.IMAGE}),
-       _img_tool("-colorspace", "Gray"), suffix="-pb", needs=("magick",)),
+       _img_tool("-colorspace", "Gray"), suffix="-pb", needs=("magick",),
+       in_wheel=False),
     Op("img-qr", "Ler QR", TOOLS, frozenset({F.IMAGE}), _read_qr,
        result=TEXT, needs=("zbarimg",), hint="Copia o conteúdo"),
     Op("img-pdf", "Juntar PDF", TOOLS, frozenset({F.IMAGE}),
@@ -570,10 +594,10 @@ TOOL_OPS = [
        hint="H.264 CRF 28"),
     Op("vid-25mb", "≤ 25 MB", TOOLS, frozenset({F.VIDEO}),
        _video_target_size(25), ext="mp4", suffix="-25mb",
-       needs=("ffmpeg", "ffprobe")),
+       needs=("ffmpeg", "ffprobe"), in_wheel=False),
     Op("vid-10mb", "≤ 10 MB", TOOLS, frozenset({F.VIDEO}),
        _video_target_size(10), ext="mp4", suffix="-10mb",
-       needs=("ffmpeg", "ffprobe")),
+       needs=("ffmpeg", "ffprobe"), in_wheel=False),
     Op("vid-mute", "Sem áudio", TOOLS, frozenset({F.VIDEO}),
        lambda c: [_ff("-i", str(c.src), "-map", "0:v", "-c", "copy", "-an",
                       str(c.out))],
@@ -687,7 +711,11 @@ def options_for(paths: list[Path], group: str) -> list[Op]:
             continue
         if not kinds <= op.kinds:
             continue
+        if not op.in_wheel:
+            continue
         if op.mode == ALL and len(paths) < max(op.min_files, 1):
+            continue
+        if op.max_files and len(paths) > op.max_files:
             continue
         if exts and exts <= op.skip_exts:
             continue

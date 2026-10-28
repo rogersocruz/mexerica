@@ -33,7 +33,9 @@ from gi.repository import Gdk, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 from . import APP_ID, __version__  # noqa: E402
 from .engine import ACTIONS, CONVERT, TOOLS, options_for, run  # noqa: E402
 from .engine import tools as T  # noqa: E402
-from .engine.ops import ACTION, TEXT, Op  # noqa: E402
+from .engine.ops import ACTION, EDITOR, TEXT, Op  # noqa: E402
+from .engine import BY_ID  # noqa: E402
+from .editors import open_editor  # noqa: E402
 from .engine.runner import unique_path  # noqa: E402
 from .wheel.geometry import Wheel  # noqa: E402
 from .wheel.render import WheelState, draw  # noqa: E402
@@ -48,9 +50,63 @@ EXT_UUID = "mexerica@rogersocruz.github.io"
 IDLE_HIDE_MS = 4000      # trava de segurança: overlay sem atividade some
 
 CSS = b"""
-window.mexerica-overlay, window.mexerica-overlay > * { background: transparent; }
-.mexerica-float { border-radius: 14px; }
+window.mexerica-overlay, window.mexerica-overlay > *,
+window.mexerica-overlay.background, window.mexerica-overlay decoration {
+  background: none; background-color: transparent;
+  box-shadow: none; border: none; outline: none;
+}
+window.mexerica-float, window.mexerica-float.background {
+  background-color: alpha(#1a1a1f, 0.55);
+  background-image: linear-gradient(135deg, alpha(white, 0.16),
+                                    alpha(white, 0.03) 55%, transparent);
+  border: 1px solid alpha(white, 0.22);
+  border-radius: 16px;
+  color: #fafafa;
+}
+window.mexerica-float decoration {
+  border-radius: 16px;
+  box-shadow: 0 8px 28px alpha(black, 0.35);
+}
+window.mexerica-float headerbar {
+  background: none; box-shadow: none; border: none; color: inherit;
+}
 .mexerica-float-box { padding: 10px 14px; }
+
+/* janelas de edicao: vidro escuro */
+window.mexerica-glass, window.mexerica-glass.background {
+  background-color: alpha(#16161b, 0.80);
+  background-image: linear-gradient(160deg, alpha(white, 0.10),
+                                    alpha(white, 0.02) 40%, transparent);
+  color: #f5f5f7;
+}
+window.mexerica-glass decoration {
+  border-radius: 14px;
+  box-shadow: 0 12px 40px alpha(black, 0.45), 0 0 0 1px alpha(white, 0.14);
+}
+window.mexerica-glass headerbar {
+  background: alpha(white, 0.04); box-shadow: none;
+  border-bottom: 1px solid alpha(white, 0.08);
+}
+.mexerica-section {
+  font-size: 0.78em; font-weight: 700; letter-spacing: 0.08em;
+  color: alpha(white, 0.55); margin-top: 8px;
+}
+.mexerica-result { font-feature-settings: "tnum"; color: alpha(white, 0.85); }
+.mexerica-status { color: alpha(white, 0.65); font-size: 0.9em; }
+.mexerica-status.error { color: #ff8a80; }
+.mexerica-frame, .mexerica-timeline {
+  background: alpha(black, 0.35); border-radius: 10px;
+  border: 1px solid alpha(white, 0.10);
+}
+.mexerica-timeline { min-height: 64px; }
+togglebutton.mexerica-page {
+  padding: 6px; border-radius: 10px; background: alpha(white, 0.05);
+  border: 2px solid transparent;
+}
+togglebutton.mexerica-page:checked {
+  background: alpha(#ff8a1f, 0.22); border-color: #ff8a1f; color: white;
+}
+.mexerica-float-box button { color: alpha(white, 0.85); }
 """
 
 
@@ -89,6 +145,7 @@ class Overlay(Gtk.Window):
                          decorated=False)
         self.app = app
         self.add_css_class("mexerica-overlay")
+        self.remove_css_class("background")     # tema não pinta fundo
         self.state = WheelState()
         self.ops: list[Op] = []
         self.paths: list[Path] = []
@@ -297,6 +354,7 @@ class FloatWindow(Gtk.Window):
                          title=f"Mexerica — {paths[0].name if n == 1 else f'{n} arquivos'}",
                          resizable=False, default_width=220)
         self.add_css_class("mexerica-float")
+        self.remove_css_class("background")
         self.paths = paths
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         box.add_css_class("mexerica-float-box")
@@ -373,6 +431,10 @@ class MexericaApp(Gtk.Application):
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        # vidro escuro: os controles do tema precisam ser os escuros
+        settings = Gtk.Settings.get_default()
+        if settings is not None:
+            settings.props.gtk_application_prefer_dark_theme = True
 
         def add(name, ptype, cb):
             act = Gio.SimpleAction.new(
@@ -383,6 +445,7 @@ class MexericaApp(Gtk.Application):
         add("show", "(sasii)", self._act_show)
         add("hide", None, self._act_hide)
         add("reveal", "as", lambda _a, p: self.reveal(p.unpack()))
+        add("open-editor", "(sas)", self._act_open_editor)
         add("open-file", "as", lambda _a, p: self.open_files(p.unpack()))
         add("open-log", None, lambda *_: self.open_files(
             [str(Path.home() / ".cache/mexerica/mexerica.log")]))
@@ -402,6 +465,18 @@ class MexericaApp(Gtk.Application):
             self.overlay = Overlay(self)
         self.overlay.open(mode, paths_from_uris(uris), x, y)
 
+    def _act_open_editor(self, _action, param):
+        """Abre uma janela de edição sem a roda (scripts, testes):
+        gapplication action io.github.rogersocruz.Mexerica open-editor \
+            "('img-crop', ['/caminho/foto.jpg'])" """
+        op_id, files = param.unpack()
+        op = BY_ID.get(op_id)
+        paths = [p for p in paths_from_uris(files) if p.exists()]
+        if op is None or op.mode != EDITOR or not paths:
+            log.warning("open-editor inválido: %s %s", op_id, files)
+            return
+        open_editor(self, op, paths)
+
     def _act_hide(self, *_):
         if self.overlay is not None and self.overlay.get_visible():
             self.overlay.close_wheel()
@@ -411,6 +486,9 @@ class MexericaApp(Gtk.Application):
         log.info("executando %s em %d arquivo(s)", op.id, len(paths))
         if op.mode == ACTION:
             self._run_action(op, paths)
+            return False
+        if op.mode == EDITOR:
+            open_editor(self, op, paths)
             return False
         self._job += 1
         job_id = f"job-{self._job}"

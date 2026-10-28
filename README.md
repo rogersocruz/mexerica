@@ -14,7 +14,7 @@ trabalho e diálogos. Foi feito para **GNOME Shell 45–51 em Wayland**.
 | Gesto (durante o arraste)  | Roda                                                   |
 |----------------------------|--------------------------------------------------------|
 | **Shift**                  | Converter (formatos de saída para aquele tipo)         |
-| **Shift + Alt**            | Ferramentas (comprimir, girar, metadados, juntar…)     |
+| **Shift + Alt**            | Ferramentas (editar, recortar, cortar, comprimir…)     |
 | **Shift + Ctrl**           | Ações (copiar caminho, terminal, copiar/mover, flutuar, ZIP) |
 | Soltar no miolo ou fora    | Cancela                                                |
 | Soltar o Shift             | A roda some e o arraste segue normal                   |
@@ -40,15 +40,43 @@ ou solte Alt/Ctrl. A roda continua no mesmo lugar.
   (ZIP, 7Z, TAR.GZ). Uma pasta solta vira ZIP, 7Z ou TAR.GZ.
 
 **Ferramentas (Shift + Alt)**
-- **Imagem:** comprimir, até 1 MB, 50%, girar 90°, espelhar, P&B, ler QR code
-  (o conteúdo vai para o clipboard). Com várias imagens: juntar em PDF e colagem.
-- **Vídeo:** comprimir, até 25 MB, até 10 MB, sem áudio, 2× velocidade,
-  girar 90° e snapshot do quadro do meio. Com vários vídeos: juntar.
-- **Áudio:** normalizar (EBU R128, −16 LUFS), comprimir, mono e tirar silêncio.
-  Com vários: juntar.
-- **PDF:** comprimir (Ghostscript), dividir por página, girar 90° e extrair
-  imagens. Com vários: juntar.
+
+As opções com "…" ficam no topo da roda e abrem uma janela. A janela abre na
+hora, e a prévia, as miniaturas e a forma de onda carregam em segundo plano.
+**Esc** cancela; **Enter** ou **Ctrl+S** salva. Salvar fecha a janela, e o
+trabalho segue com notificação, como as outras operações.
+
+- **Imagem**
+  - *Editar…*: recorte com proporção (livre, original, 1:1, 4:3, 16:9, 9:16,
+    4:5…), girar e espelhar (teclas R, L, H, V), brilho, contraste,
+    saturação, P&B, escala, formato e qualidade, com prévia ao vivo.
+  - *Recortar…*: a mesma janela, só com recorte e giro.
+  - *Tamanho…*: lado maior ou %, formato, qualidade e peso máximo. Mostra o
+    tamanho final real antes de salvar e funciona em lote.
+  - Um clique: comprimir, girar 90° e ler QR code (o conteúdo vai para o
+    clipboard). Com várias imagens: juntar em PDF e colagem.
+- **Vídeo**
+  - *Cortar…*: quadros de início e fim, tira de quadros na linha do tempo e
+    alças para arrastar. Também dá para remover o trecho e manter o resto.
+    O corte rápido (sem recodificar) é instantâneo. Se o quadro-chave
+    estiver longe do ponto escolhido, a janela avisa e passa para corte
+    exato.
+  - *Tamanho…*: caber em 8/10/25/50/100 MB ou outro valor, com resolução
+    máxima e sem áudio. Funciona em lote.
+  - Um clique: comprimir, sem áudio, 2× velocidade, girar 90° e snapshot do
+    quadro do meio. Com vários vídeos: juntar.
+- **Áudio:** *Cortar…* (forma de onda e botão para ouvir o trecho, que usa
+  o ffplay), normalizar (EBU R128, −16 LUFS), comprimir, mono e tirar
+  silêncio. Com vários: juntar.
+- **PDF:** *Páginas…* (miniaturas; extrair, apagar ou girar as
+  selecionadas), comprimir (Ghostscript), dividir por página, girar 90° e
+  extrair imagens. Com vários: juntar.
 - **Qualquer mídia:** ver metadados ou remover metadados (EXIF, GPS, autor).
+
+Os presets antigos (`img-1mb`, `img-half`, `img-flip`, `img-gray`,
+`vid-25mb`, `vid-10mb`) saíram da roda porque agora estão nas janelas.
+Continuam disponíveis em `mexerica run`. `mexerica run img-crop foto.jpg`
+abre a janela pelo serviço que já está rodando.
 
 **Ações (Shift + Ctrl):** copiar caminho, abrir terminal na pasta, copiar
 para…, mover para…, **flutuar** (uma janelinha sempre visível de onde você
@@ -135,12 +163,19 @@ Environment).
 - **Shift + arrastar no Nautilus normalmente força "mover".** Com a
   Mexerica ativa, o Shift abre a roda. Para mover entre discos, arraste sem
   Shift e escolha *Mover* no menu, ou use Ctrl+X / Ctrl+V.
+- **Shift+Alt não abre a roda se Alt+Shift troca o layout do teclado**
+  (opção xkb `grp:alt_shift_toggle`). Com essa opção, o Alt vira
+  `ISO_Next_Group` e o modificador nunca chega. Remova a opção e troque o
+  layout com Super+Espaço:
+  `gsettings set org.gnome.desktop.input-sources xkb-options "[]"`.
 - **Setas e Enter não funcionam durante o arraste.** O Mutter não entrega
   essas teclas a ninguém enquanto um arraste está em andamento. A escolha é
   feita com o mouse. Fora de um arraste (roda aberta via D-Bus), setas, Enter
   e Esc funcionam.
-- Ainda não há edição interativa: cortar vídeo, recortar imagem e tarjar
-  áreas precisam de uma interface própria (ver roadmap).
+- Ainda não dá para tarjar ou borrar áreas de uma imagem.
+- *Cortar…* não toca o vídeo, só mostra quadros. O botão de ouvir toca o
+  áudio. O player de vídeo do GTK/GStreamer pode derrubar o processo com
+  alguns arquivos, e isso derrubaria a roda junto.
 - Não existe equivalente ao AirDrop. Um candidato é o GSConnect/KDE Connect.
 - "Juntar vídeos" pressupõe arquivos com a mesma resolução.
 - Escala fracionária com layout físico (configuração antiga do Mutter) pode
@@ -173,7 +208,7 @@ precisa dos tipos de entrada que aceita, dos programas que usa e de um
 ### Roadmap
 1. Validar numa sessão GNOME real (multi-monitor, escala fracionária).
 2. Janela de progresso com cancelamento para jobs longos.
-3. Editor mínimo: cortar vídeo/áudio por tempo e recortar imagem.
+3. Tarjar/borrar áreas no *Editar…*; reordenar páginas no *Páginas…*.
 4. Preferências: tecla do gesto, qualidade padrão, pasta de saída.
 5. Menu de serviço do Dolphin e Nautilus Scripts reaproveitando o motor.
 

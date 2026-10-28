@@ -278,3 +278,55 @@ def test_svg(d):
     for op in ("to-png", "to-jpg"):
         out = _one(run(BY_ID[op], [svg]))
         assert out.stat().st_size > 0
+
+
+# ------------------------------------------------- janelas (engine/edits.py)
+
+def test_editors_top_of_tools_wheel(png, mp4):
+    ids = [o.id for o in options_for([png], TOOLS)]
+    assert ids[:3] == ["img-edit", "img-crop", "img-size"]
+    # presets antigos saem da roda, mas continuam na CLI
+    assert "img-1mb" not in ids and "img-1mb" in BY_ID
+    two = [o.id for o in options_for([png, png], TOOLS)]
+    assert "img-edit" not in two and "img-size" in two
+    assert [o.id for o in options_for([mp4], TOOLS)][:2] == \
+        ["vid-trim", "vid-size"]
+
+
+@need("magick")
+def test_image_edit_crop_after_rotate(png):
+    from mexerica.engine import edits as E
+    # 320x200 girada vira 200x320; metade de cima = 200x160
+    edit = E.ImageEdit(rotate=90, crop=(0, 0, 1, 0.5), saturation=-100)
+    out = _one(run(E.image_edit_op(BY_ID["img-edit"], edit, "-editada"),
+                   [png]))
+    assert out.name == "foto-editada.png"
+    assert E.image_size(out) == (200, 160)
+    small = E.ImageEdit(max_side=100, ext="jpg", target_kb=20)
+    out = _one(run(E.image_edit_op(BY_ID["img-size"], small, "-reduzida"),
+                   [png]))
+    assert out.suffix == ".jpg" and max(E.image_size(out)) == 100
+
+
+@need("ffmpeg", "ffprobe")
+def test_trim_exact_and_remove(mp4):
+    from mexerica.engine import edits as E
+    out = _one(run(E.trim_op(BY_ID["vid-trim"], 0.5, 1.5, fast=False),
+                   [mp4]))
+    assert abs(E.duration(out) - 1.0) < 0.15
+    out = _one(run(E.trim_op(BY_ID["vid-trim"], 0.5, 1.5, fast=False,
+                             remove=True), [mp4]))
+    assert out.name == "clip-sem-trecho.mp4"
+    assert abs(E.duration(out) - 1.0) < 0.2
+    assert E.keyframe_before(mp4, 1.5) == 0.0     # GOP longo: só o quadro 0
+
+
+@need("qpdf")
+def test_pdf_pages(pdf):
+    from mexerica.engine import edits as E
+    assert E._ranges([1, 2, 3, 5, 7, 8]) == "1-3,5,7-8"
+    out = _one(run(E.pdf_pages_op(BY_ID["pdf-pages"], "extract", [2], 2),
+                   [pdf]))
+    assert out.name == "doc-p2.pdf" and E.page_count(out) == 1
+    with pytest.raises(ValueError):
+        E.pdf_pages_op(BY_ID["pdf-pages"], "delete", [1, 2], 2)
