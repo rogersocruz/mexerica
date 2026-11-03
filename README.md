@@ -1,9 +1,45 @@
-# Mexerica 🍊
+<div align="center">
 
-Conversor de arquivos para o GNOME e o Windows 11. Você **segura Shift
-enquanto arrasta um arquivo**: uma roda de
-formatos aparece em volta do ponteiro. Ao soltar o arquivo num formato, a
-cópia convertida é salva ao lado do original. Tudo roda localmente e nada é
+<a href="https://buymeacoffee.com/rogersocruz">
+  <img src="https://img.shields.io/badge/Pague%20me%20um%20caf%C3%A9-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Pague me um café">
+</a>
+
+<br><br>
+
+<img src=".github/assets/icon.png" width="112" alt="Ícone da Mexerica">
+
+# Mexerica
+
+**Segure Shift enquanto arrasta um arquivo. Solte num formato. Pronto.**
+
+Conversor de arquivos para o GNOME e o Windows 11, 100% local.
+
+<p>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/rogersocruz/mexerica?style=flat-square&color=F2994A" alt="Licença MIT"></a>
+  <img src="https://img.shields.io/badge/GNOME-45%E2%80%9351-4A86CF?style=flat-square&logo=gnome&logoColor=white" alt="GNOME 45–51">
+  <img src="https://img.shields.io/badge/Wayland-pronto-FFBC00?style=flat-square&logo=wayland&logoColor=black" alt="Wayland">
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=flat-square&logo=windows11&logoColor=white" alt="Windows 10 e 11">
+  <img src="https://img.shields.io/badge/Python-GTK%204-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python e GTK 4">
+  <a href="https://github.com/rogersocruz/mexerica/stargazers"><img src="https://img.shields.io/github/stars/rogersocruz/mexerica?style=flat-square&color=F2C94C" alt="Estrelas"></a>
+</p>
+
+<p>
+  <a href="#-instalação-arch-linux">Instalar no Linux</a> ·
+  <a href="#-instalação-windows-10-e-11">Instalar no Windows</a> ·
+  <a href="docs/wiki/Home.md">Wiki</a> ·
+  <a href="https://rogersocruz.github.io/mexerica/">Site</a> ·
+  <a href="TODO.md">Roadmap</a>
+</p>
+
+<img src=".github/assets/wheel-convert.png" width="420" alt="A roda de conversão aberta sobre uma imagem">
+
+</div>
+
+---
+
+Você **segura Shift enquanto arrasta um arquivo**: uma roda de formatos
+aparece em volta do ponteiro. Ao soltar o arquivo num formato, a cópia
+convertida é salva ao lado do original. Tudo roda localmente e nada é
 enviado para a internet.
 
 Funciona em qualquer arraste de arquivos: Nautilus (Arquivos), área de
@@ -11,11 +47,40 @@ trabalho e diálogos. Foi feito para **GNOME Shell 45–51 em Wayland** e
 **Windows 11** (Explorer, área de trabalho e diálogos de arquivo). A roda,
 as janelas e as operações são as mesmas nos dois.
 
-📖 **Documentação completa na [wiki](docs/wiki/Home.md)**: instalação,
-todas as operações, janelas de edição, configurações, solução de problemas
-e como funciona por dentro.
+> [!TIP]
+> 📖 **Documentação completa na [wiki](docs/wiki/Home.md)**: instalação,
+> todas as operações, janelas de edição, configurações, solução de
+> problemas e como funciona por dentro.
 
-## Atalhos
+## ✨ Destaques
+
+- 🎯 **Um gesto só.** Nada de abrir programa: arraste, escolha, solte.
+- 🔒 **Local e privado.** Nenhum arquivo sai do seu computador.
+- 🧰 **Dezenas de operações.** Imagem, vídeo, áudio, PDF, Office, EPUB,
+  legendas e compactados.
+- 🛡️ **Nunca estraga nada.** Não sobrescreve, grava num temporário e só
+  renomeia no fim.
+- 🎨 **Cinco paletas**, animações e roda ajustável nas Configurações.
+- 🐧🪟 **Linux e Windows** com a mesma roda, as mesmas janelas e o mesmo motor.
+
+## 🖼️ Capturas
+
+<table>
+  <tr>
+    <td align="center"><img src=".github/assets/wheel-tools.png" alt="Roda de ferramentas"><br><sub><b>Shift + Alt</b> · Ferramentas</sub></td>
+    <td align="center"><img src=".github/assets/wheel-actions.png" alt="Roda de ações"><br><sub><b>Shift + Ctrl</b> · Ações</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src=".github/assets/addbg.png" alt="Janela ADD BG"><br><sub><b>ADD BG</b> · fundo no estilo CleanShot</sub></td>
+    <td align="center"><img src=".github/assets/crop.png" alt="Janela CROP"><br><sub><b>CROP</b> · recorte com proporção</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src=".github/assets/float.png" alt="Bolha flutuante"><br><sub><b>Flutuar</b> · arquivos sempre à mão</sub></td>
+    <td align="center"><img src=".github/assets/settings-look.png" alt="Configurações de aparência"><br><sub><b>Configurações</b> · estilo e tamanho da roda</sub></td>
+  </tr>
+</table>
+
+## ⌨️ Atalhos
 
 | Gesto (durante o arraste)  | Roda                                                   |
 |----------------------------|--------------------------------------------------------|
@@ -29,7 +94,7 @@ e como funciona por dentro.
 Pode trocar de roda sem soltar o arquivo: com Shift já pressionado, aperte
 ou solte Alt/Ctrl. A roda continua no mesmo lugar.
 
-## O que faz
+## 🧩 O que faz
 
 **Converter (Shift)**
 - **Imagens:** JPG, PNG, WebP, HEIC, AVIF, TIFF, BMP, GIF, ICO e PDF. HEIC e AVIF
@@ -131,7 +196,7 @@ na hora. Detalhes na [wiki](docs/wiki/Configuracoes.md).
   vidro das janelas.
 - Uma opção só aparece na roda se o programa que ela usa estiver instalado.
 
-## Instalação (Arch Linux)
+## 🐧 Instalação (Arch Linux)
 
 ```bash
 # obrigatório
@@ -154,7 +219,7 @@ Para instalar como pacote do sistema, use o PKGBUILD:
 Para conferir o que foi detectado: `mexerica doctor`. Para desinstalar:
 `./uninstall.sh`.
 
-## Instalação (Windows 10 e 11)
+## 🪟 Instalação (Windows 10 e 11)
 
 A interface usa o mesmo GTK 4 do Linux, que no Windows vem do
 [MSYS2](https://www.msys2.org). Basta clonar e rodar, sem administrador:
@@ -223,7 +288,7 @@ Depois de um `git pull`: `.\install.cmd -AppOnly` (só copia o app e
 reinicia o serviço). Para desinstalar: `.\uninstall.cmd` (o MSYS2 e os
 conversores continuam instalados).
 
-## Como funciona
+## ⚙️ Como funciona
 
 ```
  Nautilus ──arraste──► Mutter (compositor)
@@ -297,7 +362,7 @@ Isso permite reaproveitar o motor em Nautilus Scripts ou num menu de
 serviço do Dolphin, caso você troque o GNOME pelo KDE (K Desktop
 Environment).
 
-## Limitações conhecidas
+## ⚠️ Limitações conhecidas
 
 - **Shift + arrastar no Nautilus normalmente força "mover".** Com a
   Mexerica ativa, o Shift abre a roda. Para mover entre discos, arraste sem
@@ -355,7 +420,7 @@ Environment).
   `%LOCALAPPDATA%\Mexerica\cache\mexerica.log`; depois de um `git pull`,
   `.\install.ps1 -AppOnly` atualiza só o app.
 
-## Desenvolvimento
+## 🛠️ Desenvolvimento
 
 ```bash
 make test                       # pytest + teste da extensão (node)
@@ -380,6 +445,20 @@ precisa dos tipos de entrada que aceita, dos programas que usa e de um
 
 A lista detalhada está em [TODO.md](TODO.md).
 
-## Licença
+## 📄 Licença
 
-MIT.
+[MIT](LICENSE) © 2026 Roger Augusto Souza da Cruz.
+
+---
+
+<div align="center">
+
+Se a Mexerica te poupou uns cliques, considere pagar um café ☕
+
+<a href="https://buymeacoffee.com/rogersocruz">
+  <img src="https://img.shields.io/badge/Pague%20me%20um%20caf%C3%A9-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black" alt="Pague me um café">
+</a>
+
+<sub>Feito com 🍊 no Brasil</sub>
+
+</div>
