@@ -259,6 +259,15 @@ class SettingsWindow(Gtk.Window):
             "Iniciar com o sistema",
             "A Mexerica sobe sozinha no login" if auto is not None
             else "Disponível quando instalada pelo instalador", start))
+        if sys.platform == "win32":
+            from .desktop import hotkeys
+            page.append(_row(
+                "Liberar Shift+Alt e Shift+Ctrl",
+                "Desliga os atalhos do Windows que trocam o teclado com "
+                "essas teclas (troque com Win+Espaço). Desligado, volta "
+                "como era.",
+                _switch(not hotkeys.conflicting(), lambda on:
+                        hotkeys.disable() if on else hotkeys.restore())))
         return page
 
     def _on_fixed(self, button) -> None:

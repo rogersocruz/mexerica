@@ -600,6 +600,16 @@ def shell_image(path: Path, size: int) -> tuple[int, int, bytes] | None:
         DeleteObject(hbm)
 
 
+APPMODEL_ERROR_NO_PACKAGE = 15700
+
+
+def packaged() -> bool:
+    """Rodando de dentro do pacote MSIX (a versão da Microsoft Store)?"""
+    length = W.UINT(0)
+    return kernel32.GetCurrentPackageFullName(
+        ctypes.byref(length), None) != APPMODEL_ERROR_NO_PACKAGE
+
+
 def startup_folder() -> Path | None:
     """A pasta Inicializar do usuário (a política pode tê-la mudado de
     lugar; o instalador pergunta do mesmo jeito)."""

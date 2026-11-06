@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -119,16 +120,34 @@ def cmd_doctor(_args) -> int:
                                (office.SLIDES, "Apresentações", "pptx")):
         backend = office.route(family, src, "pdf")
         print(f"{label} → PDF: {who.get(backend, 'ninguém')}")
-    if WINDOWS:
+    if WINDOWS and not _packaged():
         print("Para instalar o que falta: .\\install.ps1 -Converters "
               "(LibreOffice: -Office)")
     return 0
+
+
+def _packaged() -> bool:
+    from .desktop import win32
+    return win32.packaged()
+
+
+def _startup_disabled(argv: list[str]) -> bool:
+    """Versão da Store: a StartupTask do pacote sempre sobe o serviço (o
+    MexericaService.exe marca MEXERICA_STARTUP); se o usuário desligou o
+    "Iniciar com o sistema", ele sai antes de abrir qualquer coisa."""
+    if not (WINDOWS and argv[:1] == ["daemon"]
+            and os.environ.pop("MEXERICA_STARTUP", None) and _packaged()):
+        return False
+    from . import settings
+    return not settings.get()["autostart"]
 
 
 def main(argv: list[str] | None = None) -> int:
     setup_process()
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0].startswith("--gapplication") or argv[0] == "daemon":
+        if _startup_disabled(argv):
+            return 0
         _setup_logging(verbose=False)
         from .app import main as app_main
         # daemon (atalho de inicialização do Windows) = modo serviço do

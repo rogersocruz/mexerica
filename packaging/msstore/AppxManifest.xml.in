@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Manifesto do pacote MSIX da Microsoft Store. O stage.py troca os @...@:
+  identidade (store.json), versão e a lista de extensões (engine/formats.py).
+
+  - Mexerica.exe, MexericaService.exe e mexerica-cli.exe são o launcher.cs:
+    chamam o pythonw/python do runtime com "-m mexerica".
+  - unvirtualizedResources: a Mexerica grava ao lado dos arquivos do
+    usuário, chama o Office por COM (fora do pacote) com caminhos em
+    %TEMP% e, se o usuário pedir, muda os atalhos de troca de teclado
+    (HKCU\Keyboard Layout\Toggle). Com a virtualização, nada disso valeria
+    fora do pacote.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap2="http://schemas.microsoft.com/appx/manifest/uap/windows10/2"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap2 uap3 uap5 desktop desktop4 desktop6 rescap">
+
+  <Identity Name="@IDENTITY_NAME@"
+            Publisher="@PUBLISHER@"
+            Version="@VERSION@"
+            ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Mexerica</DisplayName>
+    <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="pt-BR" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Mexerica"
+                 Executable="runtime\bin\Mexerica.exe"
+                 EntryPoint="Windows.FullTrustApplication"
+                 desktop4:SupportsMultipleInstances="true">
+      <uap:VisualElements
+        DisplayName="Mexerica"
+        Description="Converta arquivos segurando Shift enquanto arrasta"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png"
+                         Square310x310Logo="Assets\LargeTile.png"
+                         Square71x71Logo="Assets\SmallTile.png"
+                         ShortName="Mexerica" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- o serviço sobe no login; desligado nas Configurações, ele sai na hora -->
+        <desktop:Extension Category="windows.startupTask"
+                           Executable="runtime\bin\MexericaService.exe"
+                           EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="MexericaService" Enabled="true" DisplayName="Mexerica (serviço)" />
+        </desktop:Extension>
+        <!-- "Converter com a Mexerica" no botão direito (no Windows 11, em "Mostrar mais opções") -->
+        <uap3:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="mexerica" MultiSelectModel="Document">
+            <uap:DisplayName>Arquivo</uap:DisplayName>
+            <uap:SupportedFileTypes>
+@FILE_TYPES@
+            </uap:SupportedFileTypes>
+            <uap2:SupportedVerbs>
+              <uap3:Verb Id="ConvertWithMexerica" Parameters="open &quot;%1&quot;">Converter com a Mexerica</uap3:Verb>
+            </uap2:SupportedVerbs>
+          </uap3:FileTypeAssociation>
+        </uap3:Extension>
+        <!-- comando `mexerica` nos terminais (list, run, doctor). Fica nesta
+             entrada: uma segunda Application sem lugar no menu Iniciar
+             (AppListEntry="none") conta como app em segundo plano, e a
+             Store recusa sem a renúncia HeadlessAppBypass. -->
+        <uap5:Extension Category="windows.appExecutionAlias"
+                        Executable="runtime\bin\mexerica-cli.exe"
+                        EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias desktop4:Subsystem="console">
+            <uap5:ExecutionAlias Alias="mexerica.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+</Package>

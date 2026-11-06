@@ -27,6 +27,10 @@ DEFAULTS: dict = {
     "output_folder": "",
     "jpeg_quality": 92,
     "notify_start": True,      # notificação quando um trabalho começa
+    # versão da Microsoft Store: a StartupTask do pacote sempre sobe o
+    # serviço, que sai na hora se isto estiver desligado
+    "autostart": True,
+    "hotkeys_asked": False,    # o aviso dos atalhos de teclado já apareceu
 }
 WHEEL_SCALE = {"small": 0.85, "medium": 1.0, "large": 1.2}
 

@@ -33,6 +33,7 @@ from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 from .. import APP_ID, settings  # noqa: E402
 from ..editors.base import TITLE_PREFIX  # noqa: E402
 from . import drag as D  # noqa: E402
+from . import hotkeys as H  # noqa: E402
 from . import win32 as W  # noqa: E402
 from .toast import Toast  # noqa: E402
 
@@ -98,6 +99,7 @@ class WindowsDesktop:
         self._polling = True
         GLib.timeout_add(D.IDLE_POLL_MS, self._tick)
         self._start_tray()
+        self._offer_hotkeys()
         log.info("detecção de arraste do Windows ativa")
 
     def stop(self) -> None:
@@ -255,13 +257,37 @@ class WindowsDesktop:
     def display_name(self, path: Path) -> str:
         return W.display_name(path)
 
+    def _offer_hotkeys(self) -> None:
+        """Versão da Store: nada roda na instalação, então na primeira vez
+        o serviço pergunta se pode desligar Alt+Shift/Ctrl+Shift (o
+        install.ps1 desliga sozinho). Uma vez só; depois, em Configurações."""
+        act = Gio.SimpleAction.new("free-hotkeys", None)
+        act.connect("activate", lambda *_: H.disable())
+        self.app.add_action(act)
+        if not W.packaged() or settings.get()["hotkeys_asked"]:
+            return
+        settings.update(hotkeys_asked=True)
+        if H.conflicting():
+            self.app.notify(
+                "hotkeys", "Alt+Shift e Ctrl+Shift trocam o teclado",
+                "São as teclas das rodas de ferramentas e de ações. Desligue "
+                "esses atalhos do Windows e troque o teclado com Win+Espaço "
+                "(dá para voltar em Configurações).",
+                buttons=[("Desligar atalhos", "app.free-hotkeys", None)],
+                progress=True)
+
     # -- iniciar com o sistema -------------------------------------------------
     def autostart(self) -> bool | None:
         """None: sem o atalho do instalador (não dá para ligar daqui)."""
+        if W.packaged():
+            return settings.get()["autostart"]
         on, off = _startup()
         return True if on.exists() else False if off.exists() else None
 
     def set_autostart(self, enabled: bool) -> None:
+        if W.packaged():
+            settings.update(autostart=enabled)
+            return
         on, off = _startup()
         src, dst = (off, on) if enabled else (on, off)
         if src.exists():
