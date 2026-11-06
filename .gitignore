@@ -4,6 +4,5 @@ __pycache__/
 /pkg/
 /src/
 *.pkg.tar.*
-/packaging/msstore/build/
-/packaging/msstore/dist/
-/packaging/msstore/trailer/work/
+# pacote da Microsoft Store: repositório privado próprio (mexerica-private)
+/packaging/msstore/
