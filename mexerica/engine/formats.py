@@ -23,6 +23,7 @@ ARCHIVE = "archive"        # zip, tar.*, 7z, rar
 XOPP = "xopp"              # caderno do Xournal++
 DATA = "data"              # json, yaml, toml, xml
 FONT = "font"              # ttf, otf, woff, woff2
+LINK = "link"              # atalho de internet: .url (Windows), .webloc (Mac)
 FOLDER = "folder"
 OTHER = "other"
 
@@ -31,7 +32,7 @@ IMAGES = {IMAGE, VECTOR}
 DOCUMENTS = {DOC_TEXT, DOC_SLIDES, DOC_SHEET}
 MEDIA = {VIDEO, AUDIO}
 FILES = {IMAGE, VECTOR, VIDEO, AUDIO, PDF, DOC_TEXT, DOC_SLIDES, DOC_SHEET,
-         TEXT, EBOOK, SUBTITLE, ARCHIVE, XOPP, DATA, FONT, OTHER}
+         TEXT, EBOOK, SUBTITLE, ARCHIVE, XOPP, DATA, FONT, LINK, OTHER}
 ANY = FILES | {FOLDER}
 
 # Imagens que só abrem se o ImageMagick instalado tiver o delegate (RAW de
@@ -55,6 +56,7 @@ _EXT = {
     XOPP: "xopp",
     DATA: "json jsonl ndjson yaml yml toml xml",
     FONT: "ttf otf woff woff2",
+    LINK: "url webloc",
 }
 EXT_TO_KIND = {e: k for k, exts in _EXT.items() for e in exts.split()}
 

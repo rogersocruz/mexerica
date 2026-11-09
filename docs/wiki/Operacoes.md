@@ -23,6 +23,10 @@ Formatos de saída. A conversão pura só troca a extensão do nome.
 | **GIF** | Converte para GIF | — | `to-gif` | `magick` |
 | **ICO** | Converte para ICO | — | `to-ico` | `magick` |
 | **PDF** | Converte para PDF | — | `to-pdf` | `magick` |
+| **JXL** | Converte para JXL | fora da roda por padrão | `to-jxl` | `magick` |
+| **JP2** | Converte para JP2 | fora da roda por padrão | `to-jp2` | `magick` |
+| **TGA** | Converte para TGA | fora da roda por padrão | `to-tga` | `magick` |
+| **QOI** | Converte para QOI | fora da roda por padrão | `to-qoi` | `magick` |
 
 ### Vídeo
 
@@ -34,6 +38,8 @@ Formatos de saída. A conversão pura só troca a extensão do nome.
 | **WEBM** | Converte para WEBM | — | `to-webm` | `ffmpeg` |
 | **AVI** | Converte para AVI | — | `to-avi` | `ffmpeg` |
 | **GIF** | Converte para GIF | — | `to-gif-video` | `ffmpeg` |
+| **MP4 HEVC** | Converte para MP4 HEVC — H.265: metade do tamanho do H.264 | sufixo “HEVC”; fora da roda por padrão | `to-mp4-hevc` | `ffmpeg` |
+| **MP4 AV1** | Converte para MP4 AV1 — AV1: o menor, e o mais lento de gerar | sufixo “AV1”; fora da roda por padrão | `to-mp4-av1` | `ffmpeg` |
 
 ### Áudio
 
@@ -104,6 +110,12 @@ Formatos de saída. A conversão pura só troca a extensão do nome.
 | **TXT** | Converte para TXT | — | `to-txt-ebook` | `pandoc` |
 | **HTML** | Converte para HTML | — | `to-html-ebook` | `pandoc` |
 | **MD** | Converte para MD | — | `to-md-ebook` | `pandoc` |
+| **EPUB** | Converte para EPUB | — | `to-epub-calibre` | `ebook-convert` |
+| **AZW3** | Converte para AZW3 — Kindle | — | `to-azw3-calibre` | `ebook-convert` |
+| **MOBI** | Converte para MOBI — Kindle | — | `to-mobi-calibre` | `ebook-convert` |
+| **PDF** | Converte para PDF | — | `to-pdf-calibre` | `ebook-convert` |
+| **DOCX** | Converte para DOCX | — | `to-docx-calibre` | `ebook-convert` |
+| **TXT** | Converte para TXT | — | `to-txt-calibre` | `ebook-convert` |
 
 ### PDF
 
@@ -129,6 +141,25 @@ Formatos de saída. A conversão pura só troca a extensão do nome.
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
 | **PDF** | Converte para PDF — Exporta o caderno | — | `xopp-to-pdf` | `qpdf` |
+
+### Dados
+
+| Na roda | O que faz | Detalhes | id | Precisa de |
+|---|---|---|---|---|
+| **JSON** | Converte para JSON | — | `to-json-data` | — |
+| **YAML** | Converte para YAML | — | `to-yaml-data` | — |
+| **TOML** | Converte para TOML | — | `to-toml-data` | — |
+| **XML** | Converte para XML | — | `to-xml-data` | — |
+| **CSV** | Converte para CSV — Precisa ser uma lista de registros | — | `to-csv-data` | — |
+
+### Fontes
+
+| Na roda | O que faz | Detalhes | id | Precisa de |
+|---|---|---|---|---|
+| **TTF** | Converte para TTF — OTF vira curvas quadráticas | — | `to-ttf-font` | — |
+| **OTF** | Converte para OTF — Só de WOFF/WOFF2 com contornos CFF | — | `to-otf-font` | — |
+| **WOFF** | Converte para WOFF | — | `to-woff-font` | — |
+| **WOFF2** | Converte para WOFF2 — O menor, para sites | — | `to-woff2-font` | — |
 
 ## Ferramentas (Shift + Alt)
 
@@ -165,6 +196,7 @@ Processam mantendo o tipo. As que têm … abrem uma janela (veja [Janelas de ed
 | **MUTE** | Sem áudio | sufixo “Muted” | `vid-mute` | `ffmpeg` |
 | **2× SPEED** | 2× vel. | sufixo “2x Speed” | `vid-2x` | `ffmpeg` |
 | **ROTATE** | Girar 90° | sufixo “Rotated” | `vid-rotate` | `ffmpeg` |
+| **720P** | 720p — No máximo 720 linhas, H.264 | sufixo “720p”; fora da roda por padrão | `vid-720p` | `ffmpeg` |
 | **SNAPSHOT** | Snapshot — Quadro do meio do vídeo | sufixo “Snapshot” | `vid-snap` | `ffmpeg`, `ffprobe` |
 | **JOIN** | Juntar — Mesma resolução recomendada | vários arquivos → um resultado (mín. 2); sufixo “Merged” | `vid-join` | `ffmpeg` |
 
@@ -184,11 +216,19 @@ Processam mantendo o tipo. As que têm … abrem uma janela (veja [Janelas de ed
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
 | **PAGES** | Páginas — Extrair, apagar ou girar páginas | abre janela | `pdf-pages` | `qpdf`, `pdftoppm` |
+| **MERGE…** | Juntar — Escolher a ordem antes de juntar | abre janela | `pdf-order` | `qpdf`, `pdftoppm` |
+| **SPLIT** | Dividir — Por intervalos ou a cada N páginas | abre janela | `pdf-cut` | `qpdf`, `pdftoppm` |
 | **COMPRESS** | Comprimir — Ghostscript /ebook | sufixo “Compressed” | `pdf-compress` | `gs` |
-| **SPLIT** | Dividir — Um PDF por página | gera uma pasta; sufixo “Pages” | `pdf-split` | `qpdf` |
+| **EVERY PAGE** | Dividir — Um PDF por página | gera uma pasta; sufixo “Pages”; fora da roda por padrão | `pdf-split` | `qpdf` |
 | **ROTATE** | Girar 90° | sufixo “Rotated” | `pdf-rotate` | `qpdf` |
 | **IMAGES** | Extrair imagens | gera uma pasta; sufixo “Images” | `pdf-images` | `pdfimages` |
-| **MERGE** | Juntar | vários arquivos → um resultado (mín. 2); sufixo “Merged” | `pdf-merge` | `qpdf` |
+| **MERGE** | Juntar — Na ordem da seleção | vários arquivos → um resultado (mín. 2); sufixo “Merged” | `pdf-merge` | `qpdf` |
+
+### Texto e Markdown
+
+| Na roda | O que faz | Detalhes | id | Precisa de |
+|---|---|---|---|---|
+| **MAKE QR** | Gerar QR — QR code de um link do arquivo ou colado | abre janela | `qr-make` | `qrencode` |
 
 ### Vários tipos
 

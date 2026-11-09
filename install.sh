@@ -46,6 +46,7 @@ no Nautilus, botão direito > Scripts > Converter com a Mexerica.
 
 Opcionais no Arch (as opções aparecem na roda conforme instalar):
   sudo pacman -S --needed ffmpeg imagemagick libheif librsvg poppler qpdf \\
-      ghostscript perl-image-exiftool zbar pandoc-cli libreoffice-fresh \\
+      ghostscript perl-image-exiftool zbar qrencode pandoc-cli \\
+      libreoffice-fresh \\
       python-yaml python-fonttools python-brotli calibre
 MSG

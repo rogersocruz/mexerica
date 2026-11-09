@@ -71,3 +71,51 @@ sair e avisa quando é baixo para a resolução.
 
 Miniaturas das páginas; selecione e escolha **extrair**, **apagar** ou
 **girar** as selecionadas. **Ctrl+A** seleciona todas.
+
+### SPLIT — Split PDF
+
+Divide um PDF em vários, numa pasta (`relatório Parts`, com
+`relatório 1-3.pdf`, `relatório 4-8.pdf`…).
+
+- **Ranges:** escreva os trechos, como `1-3, 4-8, 9-` (`9-` vai até o fim,
+  `-4` começa na primeira). Cada trecho vira um arquivo; trechos podem
+  pular páginas ou se repetir.
+- **Clique numa página** para começar um arquivo novo nela, como uma
+  tesoura; clique de novo para desfazer. Os trechos no campo acompanham.
+- **Every N pages:** um arquivo a cada N páginas (1 = um por página).
+- Cada miniatura mostra a que arquivo vai; as que ficam de fora aparecem
+  apagadas.
+
+Um PDF por página sem abrir janela continua existindo (**EVERY PAGE**),
+fora da roda por padrão: ligue em Configurações > Itens da roda.
+
+### MERGE e MERGE… — juntar PDFs
+
+Selecione vários PDFs, arraste com **Shift+Alt** e solte em:
+
+- **MERGE:** junta na hora, **na ordem da seleção** (a ordem em que o
+  Explorer ou o Nautilus entregam os arquivos).
+- **MERGE…:** abre a lista na ordem da seleção, com a primeira página de
+  cada arquivo. **Arraste** as linhas para mudar a ordem, ou use as setas
+  (**Alt+↑/↓**). **×** (ou **Delete**) tira um arquivo; **A–Z**, **Reverse**
+  e **Selection order** reordenam de uma vez.
+
+O resultado leva o nome do primeiro arquivo da lista com o sufixo
+`Merged`.
+
+## Texto e links
+
+### MAKE QR — QR Code
+
+Para `.url` (atalho de internet do Windows), `.webloc` (do Mac), `.txt`,
+`.md` e `.html`: a janela acha os links do arquivo e mostra o QR do
+primeiro. Com mais de um link, escolha na lista; ou cole outro no campo
+(botão ao lado, ou **Ctrl+V**). Sai em **PNG** ou **SVG**, ao lado do
+arquivo (`Site QR.png`).
+
+Sem arquivo: **Início > Gerar QR code…**. Se houver um link copiado, ele já
+aparece; o QR vai para a pasta de saída das Configurações ou para
+**Downloads**, com o nome do site (`github.com QR.png`).
+
+Precisa do `qrencode` (`install.cmd` e o pacote da Microsoft Store já
+trazem; no Arch, `sudo pacman -S qrencode`).

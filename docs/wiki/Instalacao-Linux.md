@@ -7,7 +7,7 @@ Feito para **GNOME Shell 45–51 em Wayland**. No Arch Linux:
 sudo pacman -S --needed python-gobject gtk4
 # conversores (instale os que quiser; a roda se adapta)
 sudo pacman -S --needed ffmpeg imagemagick libheif librsvg poppler qpdf \
-    ghostscript perl-image-exiftool zbar pandoc-cli typst libreoffice-fresh
+    ghostscript perl-image-exiftool zbar qrencode pandoc-cli typst libreoffice-fresh
 
 git clone https://github.com/rogersocruz/mexerica
 cd mexerica

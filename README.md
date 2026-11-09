@@ -158,8 +158,12 @@ trabalho segue com notificação, como as outras operações.
   o ffplay), normalizar (EBU R128, −16 LUFS), comprimir, mono e tirar
   silêncio. Com vários: juntar.
 - **PDF:** *Páginas…* (miniaturas; extrair, apagar ou girar as
-  selecionadas), comprimir (Ghostscript), dividir por página, girar 90° e
-  extrair imagens. Com vários: juntar.
+  selecionadas), *Dividir…* (por intervalos como `1-3, 4-8, 9-`, clicando
+  nas páginas onde cortar, ou a cada N páginas), comprimir (Ghostscript),
+  girar 90° e extrair imagens. Com vários: juntar na ordem da seleção, ou
+  *Juntar…* para arrastar e escolher a ordem antes.
+- **Links:** *Gerar QR…* para `.url`, `.webloc`, `.txt`, `.md` e `.html`
+  (acha os links do arquivo) e, em Início, para um link colado. PNG ou SVG.
 - **Qualquer mídia:** ver metadados ou remover metadados (EXIF, GPS, autor).
 
 Os presets antigos (`img-1mb`, `img-half`, `img-flip`, `img-gray`,
@@ -203,7 +207,7 @@ na hora. Detalhes na [wiki](docs/wiki/Configuracoes.md).
 sudo pacman -S --needed python-gobject gtk4
 # conversores (instale os que quiser; a roda se adapta)
 sudo pacman -S --needed ffmpeg imagemagick libheif librsvg poppler qpdf \
-    ghostscript perl-image-exiftool zbar pandoc-cli typst libreoffice-fresh
+    ghostscript perl-image-exiftool zbar qrencode pandoc-cli typst libreoffice-fresh
 
 git clone https://github.com/rogersocruz/mexerica
 cd mexerica
@@ -242,7 +246,7 @@ O que é instalado:
 | Opção         | Programas                                                        | Para quê |
 |---------------|------------------------------------------------------------------|----------|
 | sempre        | MSYS2 (se faltar), Python 3, GTK 4, PyGObject, pycairo e os ícones Adwaita, com as dependências deles | a roda e as janelas |
-| `-Converters` | pelo MSYS2: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar, libarchive e typst | vídeo e áudio, imagens (HEIC/AVIF, SVG), PDF, QR code, ZIP/7Z/RAR, PDF de documentos sem Office |
+| `-Converters` | pelo MSYS2: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar, qrencode, libarchive e typst | vídeo e áudio, imagens (HEIC/AVIF, SVG), PDF, QR code, ZIP/7Z/RAR, PDF de documentos sem Office |
 | `-Converters` | pelo winget: Pandoc e ExifTool                                   | Markdown/HTML/EPUB, documentos sem Office e metadados |
 | `-Office`     | pelo winget: LibreOffice (~350 MB), **opcional**                 | Pages, Keynote, Numbers e WordPerfect (veja abaixo) |
 

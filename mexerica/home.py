@@ -19,7 +19,8 @@ from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from . import history  # noqa: E402
 from . import theme as TH  # noqa: E402
-from .engine import options_for  # noqa: E402
+from .editors import open_editor  # noqa: E402
+from .engine import BY_ID, options_for  # noqa: E402
 from .floating import icon_widget  # noqa: E402
 from .settings_window import GROUPS, ICON, _hint, _page, _section  # noqa: E402
 
@@ -55,7 +56,16 @@ class HomePage(Gtk.Box):
         pick = Gtk.Button(label="Escolher arquivos…", halign=Gtk.Align.CENTER,
                           css_classes=["mx-op"])
         pick.connect("clicked", self._choose)
-        self.empty.append(pick)
+        buttons = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER)
+        buttons.append(pick)
+        qr = BY_ID["qr-make"]
+        if qr.is_available():
+            make = Gtk.Button(label="Gerar QR code…", css_classes=["mx-op"],
+                              tooltip_text="De um link colado (ou copiado "
+                              "antes de abrir)")
+            make.connect("clicked", lambda *_: open_editor(app, qr, []))
+            buttons.append(make)
+        self.empty.append(buttons)
         self.files = Gtk.Box(spacing=14)
         self.zone.append(self.empty)
         self.zone.append(self.files)

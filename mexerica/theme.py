@@ -139,8 +139,11 @@ LABELS = {
     "aud-compress": "COMPRESS", "aud-mono": "MONO", "aud-silence": "SILENCE",
     "aud-join": "JOIN",
     "vid-720p": "720p",
-    "pdf-pages": "PAGES", "pdf-compress": "COMPRESS", "pdf-split": "SPLIT",
+    "pdf-pages": "PAGES", "pdf-compress": "COMPRESS",
+    "pdf-split": "EVERY PAGE", "pdf-cut": "SPLIT",
     "pdf-rotate": "ROTATE", "pdf-images": "IMAGES", "pdf-merge": "MERGE",
+    "pdf-order": "MERGE…",          # a janela: escolher a ordem antes
+    "qr-make": "MAKE QR",
     "strip-meta": "STRIP META", "show-meta": "METADATA",
     # ações
     "act-copy-path": "COPY PATH", "act-terminal": "TERMINAL",
@@ -161,6 +164,7 @@ ICONS = {
     "aud-trim": "scissors", "aud-normalize": "wave", "aud-compress": "compress",
     "aud-mono": "wave", "aud-silence": "wave", "aud-join": "merge",
     "pdf-pages": "pages", "pdf-compress": "compress", "pdf-split": "split",
+    "pdf-cut": "scissors", "pdf-order": "merge", "qr-make": "qr",
     "pdf-rotate": "rotate", "pdf-images": "image", "pdf-merge": "merge",
     "strip-meta": "eye-off", "show-meta": "tag",
     "act-copy-path": "link", "act-terminal": "terminal",
@@ -371,6 +375,16 @@ button.mx-float-close:hover { opacity: 0.88; }
 /* páginas do PDF */
 window.mx-window button.mx-page { padding: 6px; border-radius: 10px; background: alpha(white, 0.30); border: 2px solid transparent; }
 window.mx-window button.mx-page:checked { background: alpha(white, 0.55); border-color: %(orange)s; }
+/* dividir: a página que começa um arquivo novo; fora de todas as partes */
+window.mx-window button.mx-page.mx-cut { border-left: 4px solid %(orange)s; }
+window.mx-window button.mx-page.mx-gone { opacity: 0.4; }
+/* juntar: lista arrastável */
+window.mx-window list.mx-files { background: transparent; }
+window.mx-window list.mx-files row { border-radius: 10px; margin: 2px 0; background: alpha(white, 0.30); }
+window.mx-window list.mx-files row:selected { background: alpha(white, 0.55); box-shadow: inset 0 0 0 2px %(orange)s; }
+window.mx-window list.mx-files row.mx-over { box-shadow: inset 0 3px 0 %(orange)s; }
+/* QR: fundo branco, para a prévia não sumir no vidro escuro */
+window.mx-window picture.mx-qr { background: white; border-radius: 12px; padding: 10px; }
 """
 CSS = ""
 

@@ -706,6 +706,15 @@ TOOL_OPS = [
     Op("pdf-pages", "Páginas…", TOOLS, frozenset({F.PDF}), mode=EDITOR,
        max_files=1, needs=("qpdf", "pdftoppm"),
        hint="Extrair, apagar ou girar páginas"),
+    Op("pdf-order", "Juntar…", TOOLS, frozenset({F.PDF}), mode=EDITOR,
+       min_files=2, needs=("qpdf", "pdftoppm"),
+       hint="Escolher a ordem antes de juntar"),
+    Op("pdf-cut", "Dividir…", TOOLS, frozenset({F.PDF}), mode=EDITOR,
+       max_files=1, needs=("qpdf", "pdftoppm"),
+       hint="Por intervalos ou a cada N páginas"),
+    Op("qr-make", "Gerar QR…", TOOLS, frozenset({F.TEXT, F.LINK}),
+       mode=EDITOR, max_files=1, needs=("qrencode",),
+       hint="QR code de um link do arquivo ou colado"),
     # imagens
     Op("img-compress", "Comprimir", TOOLS, frozenset({F.IMAGE}),
        _img_tool("-strip", "-quality", "75"), suffix=" Compressed",
@@ -808,7 +817,7 @@ TOOL_OPS = [
                   [T.cmd("qpdf") + ["--split-pages", str(c.src),
                                     str(c.out / "pagina-%d.pdf")]])[1],
        result=DIR, suffix=" Pages", needs=("qpdf",),
-       hint="Um PDF por página"),
+       hint="Um PDF por página", in_wheel=False),     # Dividir… faz isso
     Op("pdf-rotate", "Girar 90°", TOOLS, frozenset({F.PDF}),
        lambda c: [T.cmd("qpdf") + [str(c.src), str(c.out), "--rotate=+90"]],
        suffix=" Rotated", needs=("qpdf",)),
@@ -820,7 +829,8 @@ TOOL_OPS = [
     Op("pdf-merge", "Juntar", TOOLS, frozenset({F.PDF}),
        lambda c: [T.cmd("qpdf") + ["--empty", "--pages",
                                    *map(str, c.srcs), "--", str(c.out)]],
-       suffix=" Merged", mode=ALL, min_files=2, needs=("qpdf",)),
+       suffix=" Merged", mode=ALL, min_files=2, needs=("qpdf",),
+       hint="Na ordem da seleção"),
     # genéricas
     Op("strip-meta", "Sem metadados", TOOLS,
        frozenset({F.IMAGE, F.PDF, F.VIDEO, F.AUDIO}), _strip,
@@ -876,7 +886,7 @@ def options_for(paths: list[Path], group: str,
             continue
         if not (shown(op) if shown else op.in_wheel):
             continue
-        if op.mode == ALL and len(paths) < max(op.min_files, 1):
+        if len(paths) < op.min_files:
             continue
         if op.max_files and len(paths) > op.max_files:
             continue

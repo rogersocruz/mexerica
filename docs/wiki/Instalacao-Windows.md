@@ -28,7 +28,7 @@ Explorer para a roda. O instalador recusa rodar elevado.
 | Opção | O que faz |
 |---|---|
 | *(nenhuma)* | MSYS2 (se faltar), Python 3, GTK 4, PyGObject, pycairo e os ícones Adwaita |
-| `-Converters` | Também os conversores: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar, libarchive e typst (MSYS2); Pandoc e ExifTool (winget) |
+| `-Converters` | Também os conversores: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar, qrencode, libarchive e typst (MSYS2); Pandoc e ExifTool (winget) |
 | `-Office` | LibreOffice (~350 MB, winget). Opcional: veja [Documentos do Office](Documentos-do-Office.md) |
 | `-AppOnly` | Só copia o código e reinicia o serviço, sem mexer no MSYS2 (use depois de um `git pull`) |
 | `-KeepLayoutHotkeys` | Não desliga os atalhos de troca de teclado (abaixo) |

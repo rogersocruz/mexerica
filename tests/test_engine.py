@@ -443,3 +443,118 @@ def test_remove_background(d):
                         "%[fx:p{2,2}.a] %[fx:p{100,60}.a]", "info:"],
                         capture_output=True, text=True).stdout.split()
     assert float(px[0]) == 0 and float(px[1]) == 1
+
+
+# ------------------------------------------------- juntar, dividir, QR code
+
+def test_ranges_parsing():
+    from mexerica.engine import edits as E
+    assert E.parse_ranges("1-3, 5, 8-", 10) == [[1, 2, 3], [5],
+                                                 [8, 9, 10]]
+    assert E.parse_ranges("-2;4–4", 5) == [[1, 2], [4]]   # traço longo
+    for bad in ("", "0-2", "3-1", "1-11", "a"):
+        with pytest.raises(ValueError):
+            E.parse_ranges(bad, 10)
+    assert E.every(4, 10) == [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]]
+    assert E.cuts_to_text({4, 8}, 10) == "1-3, 4-7, 8-10"
+    assert E.cuts_to_text({1, 10}, 10) == "1-9, 10"
+    assert E.cuts_to_text(set(), 1) == "1"
+
+
+def test_links():
+    from mexerica.engine import edits as E
+    text = ("Veja https://exemplo.com/a?b=1. E também (www.site.org/x), "
+            "https://pt.wikipedia.org/wiki/Mexerica_(fruta) e de novo "
+            "https://exemplo.com/a?b=1; mailto:oi@exemplo.com!")
+    assert E.extract_links(text) == [
+        "https://exemplo.com/a?b=1", "https://www.site.org/x",
+        "https://pt.wikipedia.org/wiki/Mexerica_(fruta)",
+        "mailto:oi@exemplo.com"]
+    assert E.looks_like_link(" https://a.com/x ")
+    assert not E.looks_like_link("olá mundo") and not E.looks_like_link("")
+    assert stem(E.qr_anchor("https://www.github.com/a", Path("/t"))) == \
+        "github.com"
+    assert stem(E.qr_anchor("só texto", Path("/t"))) == "QR code"
+
+
+def test_link_files(d):
+    from mexerica.engine import edits as E
+    url = d / "Site.url"
+    url.write_text("[InternetShortcut]\r\nIconIndex=0\r\n"
+                   "URL=https://exemplo.com/página\r\n", encoding="utf-8")
+    assert kind_of(url) == "link"
+    assert E.links_in(url) == ["https://exemplo.com/página"]
+    webloc = d / "Site.webloc"
+    webloc.write_text('<?xml version="1.0"?><plist><dict><key>URL</key>'
+                      "<string>https://exemplo.com/mac</string></dict>"
+                      "</plist>", encoding="utf-8")
+    assert E.links_in(webloc) == ["https://exemplo.com/mac"]
+    notes = d / "notas.txt"
+    notes.write_text("a https://um.com b https://dois.com",
+                     encoding="utf-16")
+    assert E.links_in(notes) == ["https://um.com", "https://dois.com"]
+
+
+@need("qpdf", "pdftoppm")
+def test_pdf_editors_in_wheel(pdf, d):
+    other = d / "b.pdf"
+    shutil.copy(pdf, other)
+    one = [o.id for o in options_for([pdf], TOOLS)]
+    two = [o.id for o in options_for([pdf, other], TOOLS)]
+    assert one[:2] == ["pdf-pages", "pdf-cut"] and "pdf-order" not in one
+    assert "pdf-order" in two and "pdf-merge" in two
+    assert "pdf-cut" not in two                       # um PDF por vez
+    assert "pdf-split" not in one and "pdf-split" in BY_ID   # fora da roda
+
+
+@need("qpdf")
+def test_pdf_split_and_merge_order(pdf, d):
+    from mexerica.engine import edits as E
+    five = d / "cinco.pdf"
+    sh(*T.cmd("qpdf"), "--empty", "--pages", str(pdf), str(pdf), str(pdf),
+       "1", "--", str(five))
+    assert E.page_count(five) == 5
+    parts = E.parse_ranges("1-2, 3, 4-", 5)
+    out = _one(run(E.pdf_split_op(BY_ID["pdf-cut"], parts), [five]))
+    assert out.name == "cinco Parts" and out.is_dir()
+    names = sorted(p.name for p in out.iterdir())
+    assert names == ["cinco 1-2.pdf", "cinco 3.pdf", "cinco 4-5.pdf"]
+    assert [E.page_count(out / n) for n in names] == [2, 1, 2]
+    # a ordem da lista é a ordem das páginas
+    a, b = out / "cinco 3.pdf", out / "cinco 1-2.pdf"
+    merged = _one(run(E.pdf_merge_op(BY_ID["pdf-order"]), [a, b]))
+    assert merged.name == "cinco 3 Merged.pdf"
+    assert E.page_count(merged) == 3
+    if T.has("pdftotext"):
+        text = subprocess.run(T.cmd("pdftotext") + [str(merged), "-"],
+                              capture_output=True, text=True).stdout
+        assert text.index("Ola") < text.index("Pagina 2")
+        first = subprocess.run(T.cmd("pdftotext") + [
+            "-f", "1", "-l", "1", str(merged), "-"],
+            capture_output=True, text=True).stdout
+        assert "Ola" in first          # a parte "3" é a página "Ola"
+
+
+@need("qrencode", "zbarimg")
+def test_qr_make(d):
+    from mexerica.engine import edits as E
+    url = d / "Site.url"
+    url.write_text("[InternetShortcut]\nURL=https://exemplo.com/q?a=1&b=2\n",
+                   encoding="utf-8")
+    assert "qr-make" in [o.id for o in options_for([url], TOOLS)]
+    link = E.links_in(url)[0]
+    png = _one(run(E.qr_op(BY_ID["qr-make"], link), [url]))
+    assert png.name == "Site QR.png"
+    res = run(BY_ID["img-qr"], [png])
+    assert res.texts == [link]
+    svg = _one(run(E.qr_op(BY_ID["qr-make"], "-começa com traço", "svg"),
+                   [url]))
+    assert svg.suffix == ".svg" and b"<svg" in svg.read_bytes()
+    # sem arquivo de origem: nome do site, na pasta dada
+    anchor = E.qr_anchor("https://github.com/rogersocruz", d / "saida")
+    (d / "saida").mkdir()
+    out = _one(run(E.qr_op(BY_ID["qr-make"], "https://github.com/x"),
+                   [anchor]))
+    assert out == d / "saida" / "github.com QR.png"
+    with pytest.raises(ValueError):
+        E.qr_op(BY_ID["qr-make"], "  ")

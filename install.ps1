@@ -18,7 +18,8 @@
 
 .PARAMETER Converters
   Instala também os conversores: ffmpeg, ImageMagick, libheif, librsvg,
-  poppler, qpdf, Ghostscript, zbar, libarchive, typst, PyYAML, fontTools e
+  poppler, qpdf, Ghostscript, zbar, qrencode, libarchive, typst, PyYAML,
+  fontTools e
   brotli pelo MSYS2; Pandoc e ExifTool pelo winget. Sem isso, a roda mostra
   só o que já existir.
 
@@ -220,8 +221,8 @@ if (-not $AppOnly) {
     if ($Converters) {
         # um por vez: se algum faltar no repositório, os outros entram
         foreach ($name in 'ffmpeg', 'imagemagick', 'libheif', 'librsvg', 'poppler',
-                          'qpdf', 'ghostscript', 'zbar', 'libarchive', 'typst',
-                          'python-yaml', 'python-fonttools', 'python-brotli') {
+                          'qpdf', 'ghostscript', 'zbar', 'qrencode', 'libarchive',
+                          'typst', 'python-yaml', 'python-fonttools', 'python-brotli') {
             if (-not (Invoke-Pacman @('-S', '--needed', '--noconfirm', ($Pkg + $name)))) {
                 Write-Warning "pacman: $name não foi instalado"
             }

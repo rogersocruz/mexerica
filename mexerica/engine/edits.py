@@ -7,14 +7,16 @@ Python, sem GTK, para dar para testar.
 from __future__ import annotations
 
 import dataclasses
+import re
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import formats as F
 from . import tools as T
-from .ops import (ALL, EACH, Ctx, Op, Step, _AUDIO_CODEC, _X264, _audio_codec,
-                  _ff, _ffprobe_duration)
+from .ops import (ALL, DIR, EACH, Ctx, Op, Step, _AUDIO_CODEC, _X264,
+                  _audio_codec, _ff, _ffprobe_duration)
 
 
 def derive(base: Op, build, **changes) -> Op:
@@ -277,8 +279,188 @@ def pdf_pages_op(base: Op, action: str, pages: list[int], total: int) -> Op:
     return derive(base, build, suffix=suffix)
 
 
+def parse_ranges(text: str, total: int) -> list[list[int]]:
+    """'1-3, 5, 8-' -> [[1,2,3], [5], [8..total]]. Cada trecho vira uma
+    parte; '-4' começa na 1 e '8-' vai até o fim. Páginas fora do PDF ou
+    trecho de trás para a frente dão ValueError com a explicação."""
+    parts = []
+    for chunk in text.replace(";", ",").split(","):
+        chunk = chunk.strip().replace(" ", "").replace("–", "-")
+        if not chunk:
+            continue
+        a, sep, b = chunk.partition("-")
+        try:
+            first = int(a) if a else 1
+            last = (int(b) if b else total) if sep else first
+        except ValueError:
+            raise ValueError(f"\"{chunk}\" is not a range "
+                             "(try 1-3, 5, 8-)") from None
+        if first < 1 or last > total:
+            raise ValueError(f"\"{chunk}\": the PDF has pages 1 to {total}")
+        if first > last:
+            raise ValueError(f"\"{chunk}\": starts after it ends")
+        parts.append(list(range(first, last + 1)))
+    if not parts:
+        raise ValueError("Type the ranges (e.g. 1-3, 5, 8-).")
+    return parts
+
+
+def every(n: int, total: int) -> list[list[int]]:
+    """Partes de n páginas (a última pode ser menor)."""
+    if n < 1:
+        raise ValueError("n precisa ser pelo menos 1")
+    return [list(range(i, min(i + n, total + 1)))
+            for i in range(1, total + 1, n)]
+
+
+def cuts_to_text(cuts: set[int], total: int) -> str:
+    """Páginas que começam uma parte nova -> '1-3, 4-7, 8-10'."""
+    starts = sorted({1} | {c for c in cuts if 1 < c <= total})
+    ends = [s - 1 for s in starts[1:]] + [total]
+    return ", ".join(str(a) if a == b else f"{a}-{b}"
+                     for a, b in zip(starts, ends))
+
+
+def pdf_split_op(base: Op, parts: list[list[int]]) -> Op:
+    """Um PDF por parte, numa pasta: 'doc 1-3.pdf', 'doc 4-7.pdf'..."""
+    if not parts:
+        raise ValueError("nenhuma parte")
+
+    def build(ctx: Ctx) -> list[Step]:
+        ctx.out.mkdir(parents=True, exist_ok=True)
+        stem = F.stem(ctx.src)
+        steps, names = [], set()
+        for part in parts:
+            name = f"{stem} {_ranges(part).replace(',', ' ')}"
+            while name in names:            # o mesmo trecho duas vezes
+                name += "+"
+            names.add(name)
+            steps.append(T.cmd("qpdf") + [
+                "--empty", "--pages", str(ctx.src), _ranges_ordered(part),
+                "--", str(ctx.out / f"{name}.pdf")])
+        return steps
+    return derive(base, build, result=DIR, suffix=" Parts")
+
+
+def _ranges_ordered(pages: list[int]) -> str:
+    """Como _ranges, mas sem reordenar (o qpdf respeita a ordem dada)."""
+    if pages == sorted(set(pages)):
+        return _ranges(pages)
+    return ",".join(map(str, pages))
+
+
+def pdf_merge_op(base: Op) -> Op:
+    """Juntar na ordem em que os caminhos chegarem (a da janela)."""
+    def build(ctx: Ctx) -> list[Step]:
+        return [T.cmd("qpdf") + ["--empty", "--pages", *map(str, ctx.srcs),
+                                 "--", str(ctx.out)]]
+    return derive(base, build, mode=ALL, ext="pdf", suffix=" Merged")
+
+
+# --------------------------------------------------------------------------
+# QR code
+# --------------------------------------------------------------------------
+
+# http(s)://, www. e mailto:; a pontuação no fim (". ) ,") não entra
+_URL = re.compile(r"""(?:https?://|www\.|mailto:)[^\s<>"'`{}|\\^]+""", re.I)
+_TRAIL = ".,;:!?)]}>'\""
+QR_SIDE = 1024          # px do PNG (o qrencode trabalha em módulos)
+
+
+def extract_links(text: str) -> list[str]:
+    """Links na ordem em que aparecem, sem repetir."""
+    out: list[str] = []
+    for m in _URL.finditer(text):
+        url = m.group(0)
+        while url and url[-1] in _TRAIL:
+            # parêntese que fecha um aberto dentro do link fica (Wikipedia)
+            if url[-1] == ")" and url.count("(") >= url.count(")"):
+                break
+            url = url[:-1]
+        if url.lower().startswith("www."):
+            url = "https://" + url
+        if len(url) > 10 and url not in out:
+            out.append(url)
+    return out
+
+
+def links_in(path: Path) -> list[str]:
+    """Links de um .url, .webloc, .txt, .md, .html..."""
+    raw = path.read_bytes()[:2_000_000]
+    for enc in ("utf-8-sig", "utf-16", "cp1252"):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text = raw.decode("utf-8", "replace")
+    if F.full_ext(path) == "url":
+        # [InternetShortcut] URL=...: só a linha URL (o resto é ícone, hash)
+        for line in text.splitlines():
+            if line.strip().upper().startswith("URL="):
+                url = line.split("=", 1)[1].strip()
+                return [url] if url else []
+    return extract_links(text)
+
+
+def looks_like_link(text: str) -> bool:
+    text = text.strip()
+    return bool(text) and "\n" not in text and \
+        _URL.fullmatch(text) is not None
+
+
+def qr_write(text: str, out: Path, fmt: str = "png",
+             side: int = QR_SIDE) -> None:
+    """Grava o QR em `out`. O conteúdo vai pelo stdin (nada de argv
+    começando com '-'); a saída, num arquivo: no Windows o stdout do
+    qrencode é texto e estragaria o PNG (LF vira CRLF)."""
+    # 8 px por módulo: ~300 px num link curto, ~1000 px num bem longo
+    argv = T.cmd("qrencode") + ["-t", fmt.upper(), "-l", "M", "-m", "4",
+                                "-s", str(max(side // 128, 2)),
+                                "-o", str(out)]
+    proc = subprocess.run(argv, input=text.encode("utf-8"),
+                          capture_output=True, check=False)
+    if proc.returncode != 0 or not out.exists():
+        msg = proc.stderr.decode("utf-8", "replace").strip()
+        raise RuntimeError(msg or "o qrencode falhou")
+
+
+def qr_bytes(text: str, fmt: str = "png", side: int = QR_SIDE) -> bytes:
+    """Para a prévia da janela."""
+    with tempfile.TemporaryDirectory(prefix="mexerica-qr-") as tmp:
+        out = Path(tmp) / f"qr.{fmt}"
+        qr_write(text, out, fmt, side)
+        return out.read_bytes()
+
+
+def qr_op(base: Op, text: str, fmt: str = "png") -> Op:
+    text = text.strip()
+    if not text:
+        raise ValueError("Paste a link or some text.")
+    if fmt not in ("png", "svg"):
+        raise ValueError(f"formato {fmt}")
+
+    def build(ctx: Ctx) -> list[Step]:
+        return [lambda c: qr_write(text, c.out, fmt)]
+    return derive(base, build, ext=fmt, suffix=" QR")
+
+
+def qr_anchor(text: str, folder: Path) -> Path:
+    """Caminho de referência para um QR sem arquivo de origem (colado):
+    o nome vem do site ('github.com QR.png') e a pasta é `folder`."""
+    m = re.match(r"(?:https?://)?(?:www\.)?([^/?#\s:]+)", text.strip(), re.I)
+    name = m.group(1) if m and "." in m.group(1) else "QR code"
+    name = re.sub(r'[<>:"/\\|?*]', "_", name)[:60]
+    # a extensão é de mentira: sem ela, "github.com" perderia o ".com"
+    return folder / f"{name}.url"
+
+
 __all__ = ["ImageEdit", "image_edit_op", "image_size", "trim_op",
            "add_background_op",
            "keyframe_before",
            "video_size_op", "pdf_pages_op", "page_count", "duration",
+           "parse_ranges", "every", "cuts_to_text", "pdf_split_op",
+           "pdf_merge_op", "extract_links", "links_in", "looks_like_link",
+           "qr_write", "qr_bytes", "qr_op", "qr_anchor",
            "derive", "ALL", "EACH"]
