@@ -262,18 +262,20 @@ class WindowsDesktop:
         o serviço pergunta se pode desligar Alt+Shift/Ctrl+Shift (o
         install.ps1 desliga sozinho). Uma vez só; depois, em Configurações."""
         act = Gio.SimpleAction.new("free-hotkeys", None)
-        act.connect("activate", lambda *_: H.disable())
+        packaged = W.packaged()
+        act.connect("activate", lambda *_: H.open_windows_settings()
+                    if packaged else H.disable())
         self.app.add_action(act)
-        if not W.packaged() or settings.get()["hotkeys_asked"]:
+        if not packaged or settings.get()["hotkeys_asked"]:
             return
         settings.update(hotkeys_asked=True)
         if H.conflicting():
             self.app.notify(
                 "hotkeys", "Alt+Shift e Ctrl+Shift trocam o teclado",
                 "São as teclas das rodas de ferramentas e de ações. Desligue "
-                "esses atalhos do Windows e troque o teclado com Win+Espaço "
-                "(dá para voltar em Configurações).",
-                buttons=[("Desligar atalhos", "app.free-hotkeys", None)],
+                "esses atalhos nas Configurações do Windows e troque o "
+                f"teclado com Win+Espaço ({H.STEPS}).",
+                buttons=[("Abrir Configurações", "app.free-hotkeys", None)],
                 progress=True)
 
     # -- iniciar com o sistema -------------------------------------------------

@@ -261,6 +261,19 @@ class SettingsWindow(Gtk.Window):
             else "Disponível quando instalada pelo instalador", start))
         if sys.platform == "win32":
             from .desktop import hotkeys
+            from .desktop.win32 import packaged
+            if packaged():
+                # Store: sem unvirtualizedResources, quem muda é o Windows
+                open_btn = Gtk.Button(label="Abrir no Windows",
+                                      valign=Gtk.Align.CENTER)
+                open_btn.connect("clicked",
+                                 lambda *_: hotkeys.open_windows_settings())
+                page.append(_row(
+                    "Liberar Shift+Alt e Shift+Ctrl",
+                    "Desligue os atalhos do Windows que trocam o teclado "
+                    f"com essas teclas (troque com Win+Espaço). {hotkeys.STEPS}.",
+                    open_btn))
+                return page
             page.append(_row(
                 "Liberar Shift+Alt e Shift+Ctrl",
                 "Desliga os atalhos do Windows que trocam o teclado com "

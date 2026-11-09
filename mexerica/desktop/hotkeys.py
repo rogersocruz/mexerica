@@ -58,6 +58,19 @@ def conflicting() -> bool:
     return any(v in CONFLICTING for v in _read().values())
 
 
+SETTINGS_URI = "ms-settings:keyboard"     # Teclado avançado
+STEPS = ("Teclado avançado > Teclas de atalho do idioma de entrada > "
+         "Alterar sequência de teclas: \"Não atribuído\" nas duas")
+
+
+def open_windows_settings() -> None:
+    """Versão da Store: o pacote não pede unvirtualizedResources, então o
+    que ela gravasse no HKCU (ela ou um filho, como o reg.exe) ficaria na
+    bolha do pacote e o Windows não veria. As Configurações do Windows
+    abrem fora do pacote (ativação por protocolo) e a pessoa troca lá."""
+    os.startfile(SETTINGS_URI)
+
+
 def disable() -> None:
     current = _read()
     names = [n for n, v in current.items() if v in CONFLICTING]
