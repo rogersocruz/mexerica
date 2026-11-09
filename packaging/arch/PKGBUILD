@@ -1,6 +1,6 @@
 # Maintainer: Roger Augusto Souza da Cruz <rogersocruz@gmail.com>
 pkgname=mexerica-git
-pkgver=0.1.0
+pkgver=0.1.2
 pkgrel=1
 pkgdesc="Converta arquivos segurando Shift enquanto arrasta (GNOME Shell + GTK 4)"
 arch=('any')
@@ -34,7 +34,7 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd mexerica
-  printf "0.1.0.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  printf "0.1.2.r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 package() {

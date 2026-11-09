@@ -56,6 +56,15 @@ def _startup() -> tuple[Path, Path]:
     return folder / STARTUP_LINK, Path(local, "Mexerica", "autostart-off.lnk")
 
 
+def _glass(win, hwnd: int) -> None:
+    """Vidro na janela; sem transparência no Windows, fundo sólido (a
+    janela translúcida sem o borrão deixaria o texto ilegível)."""
+    if W.set_glass(hwnd, rounded=True):
+        win.remove_css_class("mx-solid")
+    else:
+        win.add_css_class("mx-solid")
+
+
 def _app_alias(name: str) -> str | None:
     """Apps da Microsoft Store (wt, winget) são aliases em WindowsApps,
     pasta que nem sempre está no PATH."""
@@ -168,6 +177,8 @@ class WindowsDesktop:
         drag = W.drag_image()
         if drag:
             W.place_below(hwnd, drag)    # a miniatura do arraste fica visível
+        # sem transparência no Windows, a roda fica sem borrão (seria preto);
+        # o escurecimento que ela mesma desenha continua
         W.set_glass(hwnd, rounded=False)
 
     def wheel_center(self, win, w: float, h: float):
@@ -231,7 +242,7 @@ class WindowsDesktop:
         if (win.get_title() or "").startswith(TITLE_PREFIX):
             W.set_topmost(hwnd)
         if win.has_css_class("mx-window"):
-            W.set_glass(hwnd, rounded=True)
+            _glass(win, hwnd)
         if win.has_css_class("mx-float"):
             # a bolha nasce sob o ponteiro (onde o arquivo foi solto)
             W.plain_frame(hwnd)
@@ -345,7 +356,7 @@ class WindowsDesktop:
                            W.WS_EX_APPWINDOW)
             toast.set_visible(True)       # sem present(): não rouba o foco
             W.set_topmost(hwnd)
-            W.set_glass(hwnd, rounded=True)
+            _glass(toast, hwnd)
         GLib.idle_add(self._stack)
         GLib.timeout_add(80, self._stack)  # o GTK pode mudar a altura depois
 

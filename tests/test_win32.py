@@ -147,3 +147,56 @@ def test_float_drag_carries_the_files(tmp_path, names):
         assert dropped_paths(obj) == [str(p) for p in paths]
     finally:
         win32.com_release(obj)
+
+
+# ------------------------------------------------ vidro sem transparência
+
+class _Key:
+    def __init__(self, value):
+        self.value = value
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+@pytest.mark.parametrize("registry, saver, expected", [
+    (1, 0, True),            # transparência ligada, sem Economia de energia
+    (0, 0, False),           # desligada nas Configurações
+    (1, 1, False),           # Economia de energia (notebook na bateria)
+    (None, 0, True),         # sem o valor no registro: padrão é ligada
+])
+def test_transparency_on(monkeypatch, registry, saver, expected):
+    import winreg
+
+    def open_key(_root, path):
+        if registry is None:
+            raise FileNotFoundError(path)
+        return _Key(registry)
+    monkeypatch.setattr(winreg, "OpenKey", open_key)
+    monkeypatch.setattr(winreg, "QueryValueEx",
+                        lambda key, _name: (key.value, 4))
+
+    class K32:
+        @staticmethod
+        def GetSystemPowerStatus(ptr):
+            ctypes.cast(ptr, ctypes.POINTER(
+                win32.SYSTEM_POWER_STATUS)).contents.SystemStatusFlag = saver
+            return 1
+    monkeypatch.setattr(win32, "kernel32", K32)
+    assert win32.transparency_on() is expected
+
+
+def test_no_blur_without_transparency(monkeypatch):
+    """Com a transparência desligada, o DWM pintaria de preto a área do
+    borrão (a roda cobre o monitor todo): o borrão é desligado."""
+    states = []
+    monkeypatch.setattr(win32, "_accent", lambda _h, s: states.append(s))
+    monkeypatch.setattr(win32, "_dwm_uint", lambda *a: None)
+    monkeypatch.setattr(win32, "transparency_on", lambda: False)
+    assert win32.set_glass(1, rounded=False) is False
+    monkeypatch.setattr(win32, "transparency_on", lambda: True)
+    assert win32.set_glass(1, rounded=True) is True
+    assert states == [win32.ACCENT_DISABLED, win32.ACCENT_ENABLE_BLURBEHIND]
