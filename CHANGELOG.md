@@ -30,6 +30,16 @@ CORREÇÃO. Na Microsoft Store a mesma versão ganha um `.0` no fim
   isso com "Every N pages" = 1). Continua em Configurações > Itens da roda,
   na Início e em `mexerica run pdf-split`.
 
+## [0.1.2] — não lançada
+
+### Corrigido
+
+- **Tela preta no Windows** ao abrir a roda (o monitor inteiro) e janelas
+  escuras, quando os *Efeitos de transparência* estão desligados ou a
+  **Economia de energia** está ligada (notebook na bateria). O borrão do
+  vidro só é ligado com a transparência do Windows ativa; sem ela, a roda
+  fica sem borrão e as janelas ganham fundo sólido.
+
 ## [0.1.1] — 2026-11-09
 
 Primeira versão publicada na Microsoft Store.
@@ -46,6 +56,7 @@ Primeira versão: rodas de conversão, ferramentas e ações; janelas de
 edição de imagem, vídeo, áudio e PDF; Início, Flutuar, menu de contexto;
 instalação por script no Windows e no Arch (GNOME).
 
-[0.2.0]: https://github.com/rogersocruz/mexerica/compare/v0.1.1...HEAD
+[0.2.0]: https://github.com/rogersocruz/mexerica/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/rogersocruz/mexerica/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rogersocruz/mexerica/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rogersocruz/mexerica/releases/tag/v0.1.0

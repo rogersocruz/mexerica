@@ -233,7 +233,7 @@ WS_EX_NOACTIVATE = 0x08000000      # clicar não rouba o foco
 WS_EX_APPWINDOW = 0x40000
 ASFW_ANY = 0xFFFFFFFF
 WCA_ACCENT_POLICY = 19
-ACCENT_ENABLE_BLURBEHIND = 3
+ACCENT_DISABLED, ACCENT_ENABLE_BLURBEHIND = 0, 3
 DWMWA_WINDOW_CORNER_PREFERENCE = 33
 DWMWA_BORDER_COLOR = 34
 DWMWCP_DONOTROUND, DWMWCP_ROUND = 1, 2
@@ -426,22 +426,61 @@ def _dwm_uint(hwnd: int, attr: int, value: int) -> None:
     DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), ctypes.sizeof(v))
 
 
-def set_glass(hwnd: int, rounded: bool) -> None:
+class SYSTEM_POWER_STATUS(ctypes.Structure):
+    _fields_ = [("ACLineStatus", W.BYTE), ("BatteryFlag", W.BYTE),
+                ("BatteryLifePercent", W.BYTE), ("SystemStatusFlag", W.BYTE),
+                ("BatteryLifeTime", W.DWORD),
+                ("BatteryFullLifeTime", W.DWORD)]
+
+
+PERSONALIZE = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+
+
+def transparency_on() -> bool:
+    """O Windows está mostrando transparência agora? Desligada em
+    Configurações > Personalização > Cores > Efeitos de transparência, ou
+    pela Economia de energia (o notebook na bateria a liga sozinho). Sem
+    ela, o DWM pinta de PRETO a área do borrão: na roda, o monitor todo."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, PERSONALIZE) as key:
+            if not winreg.QueryValueEx(key, "EnableTransparency")[0]:
+                return False
+    except OSError:
+        pass                                # sem o valor: ligada (padrão)
+    status = SYSTEM_POWER_STATUS()
+    if kernel32.GetSystemPowerStatus(ctypes.byref(status)) and             status.SystemStatusFlag == 1:   # Economia de energia ligada
+        return False
+    return True
+
+
+def _accent(hwnd: int, state: int) -> None:
+    if SetWindowCompositionAttribute is None:
+        return
+    accent = ACCENTPOLICY(state, 0, 0, 0)
+    data = WINCOMPATTRDATA(WCA_ACCENT_POLICY,
+                           ctypes.cast(ctypes.pointer(accent),
+                                       ctypes.c_void_p),
+                           ctypes.sizeof(accent))
+    SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
+
+
+def set_glass(hwnd: int, rounded: bool) -> bool:
     """Vidro: o DWM borra o que está atrás da janela (no GNOME é a extensão
     que faz isso). A janela GTK já é translúcida, então o borrão aparece
     através dela. Com cantos, o DWM arredonda a janela (8 px, Windows 11)
-    e corta o borrão junto."""
-    if SetWindowCompositionAttribute is not None:
-        accent = ACCENTPOLICY(ACCENT_ENABLE_BLURBEHIND, 0, 0, 0)
-        data = WINCOMPATTRDATA(WCA_ACCENT_POLICY,
-                               ctypes.cast(ctypes.pointer(accent),
-                                           ctypes.c_void_p),
-                               ctypes.sizeof(accent))
-        SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
+    e corta o borrão junto. Devolve se o borrão ficou ligado: sem
+    transparência no Windows ele é desligado (ficaria preto), e quem chama
+    deixa a janela sólida."""
+    glass = transparency_on()
+    # desliga também: a janela pode ter ganhado o borrão numa abertura
+    # anterior, com a transparência ainda ligada
+    _accent(hwnd, ACCENT_ENABLE_BLURBEHIND if glass else ACCENT_DISABLED)
     # no Windows 10 estes dois só devolvem erro, sem efeito
     _dwm_uint(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE,
               DWMWCP_ROUND if rounded else DWMWCP_DONOTROUND)
     _dwm_uint(hwnd, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE)
+    return glass
 
 
 def plain_frame(hwnd: int) -> None:

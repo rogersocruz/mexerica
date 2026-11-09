@@ -27,6 +27,18 @@ Primeiro, dois diagnósticos:
   (`mexerica doctor`), ela pode não servir para todos os arquivos
   arrastados, ou foi desligada em **Configurações > Itens da roda**.
 
+## A tela fica preta ao abrir a roda (Windows)
+
+Acontecia até a 0.1.1 quando o Windows está sem transparência:
+*Configurações > Personalização > Cores > Efeitos de transparência*
+desligado, ou a **Economia de energia** ligada (o notebook na bateria a
+liga sozinho). O vidro da roda usa o borrão do Windows, e sem
+transparência o Windows pinta essa área de preto, que na roda é o monitor
+inteiro. Desde a 0.1.2 a Mexerica confere isso: sem transparência, a roda
+abre sem borrão e as janelas ficam com fundo sólido. Com a versão antiga,
+ligar os efeitos de transparência (ou sair da Economia de energia)
+resolve.
+
 ## Shift+Alt ou Shift+Ctrl troca o teclado
 
 São os atalhos de troca de teclado do sistema. Windows: o instalador os

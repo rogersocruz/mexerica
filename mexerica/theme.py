@@ -233,6 +233,11 @@ window.mx-window {
   border: 1px solid alpha(white, 0.45);
 }
 window.mx-window > * { border-radius: %(radius)dpx; }
+/* Windows sem transparência (ou na Economia de energia): sem o borrão
+   do DWM, o vidro vira cor sólida */
+window.mx-window.mx-solid {
+  background: linear-gradient(180deg, %(top)s, %(bottom)s);
+}
 .mx-header { padding: 10px 12px 4px 12px; }
 .mx-title { font-weight: 600; font-size: 13px; color: %(text)s; }
 button.mx-close {
