@@ -82,6 +82,15 @@ isso.
     observe o DnD e leia os modificadores (o equivalente à extensão do
     GNOME).
   - Visual: o blur do KWin (`org_kde_kwin_blur`) dá o vidro borrado.
+- [ ] **COSMIC** (branch `feat/cosmic`, experimental): "Abrir com >
+      Mexerica (roda)" (`mexerica wheel`) e Shift + arrastar com
+      `/dev/input` (grupo `input`) + `gtk4-layer-shell`.
+  - [ ] Validar numa sessão real: o cosmic-comp entrega o DnD para a
+        superfície de sobreposição? O drop chega ao GtkDropTarget?
+  - [ ] Multi-monitor: hoje a sobreposição cobre a saída que o
+        compositor escolher.
+  - [ ] Arraste por toque no touchpad (tap-and-drag) não gera BTN_LEFT no
+        kernel: não abre a roda.
 - [ ] **Wayland wlroots (Sway, Hyprland) e outros:**
   - Overlay via `wlr-layer-shell` (camada overlay, sem foco).
   - O DnD nesses compositores não expõe os modificadores: talvez seja

@@ -2,6 +2,8 @@
 
   mexerica                     inicia o serviço (roda + notificações)
   mexerica open ARQ...         abre a janela Início com os arquivos
+  mexerica wheel [-m MODO] ARQ...  abre a roda no centro da tela (clique
+                               escolhe); é o "Abrir com" fora do GNOME
   mexerica list ARQ...         lista operações disponíveis para os arquivos
   mexerica run ID ARQ...       executa uma operação sem interface
   mexerica doctor              mostra quais programas externos foram achados
@@ -20,7 +22,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, cache_dir
-from .desktop import WINDOWS, setup_process
+from .desktop import WINDOWS, preload_layer_shell, setup_process
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -92,6 +94,30 @@ def _open_editor(op_id: str, files: list[str]) -> int:
     return 0
 
 
+def cmd_wheel(args) -> int:
+    """Pede ao serviço a roda com estes arquivos, no centro da tela. Se o
+    serviço não estiver rodando, o D-Bus o inicia (DBusActivatable)."""
+    from gi.repository import Gio, GLib
+    from . import APP_ID
+    uris = [Gio.File.new_for_path(str(Path(f).resolve())).get_uri()
+            for f in args.files if Path(f).exists()]
+    if not uris:
+        print("nenhum arquivo encontrado", file=sys.stderr)
+        return 2
+    try:
+        Gio.bus_get_sync(Gio.BusType.SESSION, None).call_sync(
+            APP_ID, "/" + APP_ID.replace(".", "/"),
+            "org.freedesktop.Application", "ActivateAction",
+            GLib.Variant("(sava{sv})", (
+                "show", [GLib.Variant("(sasii)", (args.mode, uris, 0, 0))],
+                {})),
+            None, Gio.DBusCallFlags.NONE, 15000, None)
+    except GLib.Error as exc:
+        print(f"serviço não respondeu: {exc.message}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_doctor(_args) -> int:
     from .engine import office
     from .engine import tools as T
@@ -145,6 +171,9 @@ def _startup_disabled(argv: list[str]) -> bool:
 def main(argv: list[str] | None = None) -> int:
     setup_process()
     argv = sys.argv[1:] if argv is None else argv
+    if not argv or argv[0].startswith("--gapplication") or argv[0] in (
+            "daemon", "open"):
+        preload_layer_shell(argv)        # COSMIC: reinicia uma vez, se preciso
     if not argv or argv[0].startswith("--gapplication") or argv[0] == "daemon":
         if _startup_disabled(argv):
             return 0
@@ -175,6 +204,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("op")
     p.add_argument("files", nargs="+")
     p.set_defaults(func=cmd_run)
+    p = sub.add_parser("wheel", help="abre a roda com os arquivos")
+    p.add_argument("-m", "--mode", default="convert",
+                   choices=["convert", "tools", "actions"])
+    p.add_argument("files", nargs="+")
+    p.set_defaults(func=cmd_wheel)
     p = sub.add_parser("doctor", help="checa dependências")
     p.set_defaults(func=cmd_doctor)
     args = parser.parse_args(argv)

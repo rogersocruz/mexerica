@@ -7,6 +7,9 @@ notificações):
 
   GNOME    a extensão do Shell percebe o arraste e chama o serviço por
            D-Bus (gnome.py)
+  COSMIC   EXPERIMENTAL: o serviço lê mouse e teclado do kernel
+           (/dev/input) e a roda é uma superfície do wlr-layer-shell
+           (cosmic.py, evinput.py); mesma regra do drag.py
   Windows  o próprio serviço observa mouse e teclado e cuida das janelas
            pela API Win32 (windows.py, win32.py); a regra de quando abrir
            e fechar a roda é a mesma da extensão (drag.py)
@@ -18,6 +21,7 @@ withdraw e status.
 """
 from __future__ import annotations
 
+import glob
 import os
 import subprocess
 import sys
@@ -57,9 +61,51 @@ def _subprocess_defaults() -> None:
     subprocess.Popen = Popen
 
 
+def is_cosmic() -> bool:
+    """Sessão do COSMIC (ou MEXERICA_DESKTOP=cosmic, para testar o backend
+    em outro compositor com wlr-layer-shell)."""
+    forced = os.environ.get("MEXERICA_DESKTOP", "").lower()
+    if forced:
+        return forced == "cosmic"
+    return "cosmic" in os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+
+
+def layer_shell_library() -> str | None:
+    """Caminho do libgtk4-layer-shell.so (Arch, Debian/Ubuntu/Pop, Fedora)."""
+    for pattern in ("/usr/lib/libgtk4-layer-shell.so*",
+                    "/usr/lib64/libgtk4-layer-shell.so*",
+                    "/usr/lib/*-linux-gnu/libgtk4-layer-shell.so*",
+                    "/usr/local/lib/libgtk4-layer-shell.so*",
+                    "/usr/local/lib/*-linux-gnu/libgtk4-layer-shell.so*"):
+        found = sorted(glob.glob(pattern), key=len)
+        if found:
+            return found[0]
+    return None
+
+
+def preload_layer_shell(argv: list[str]) -> None:
+    """O gtk4-layer-shell precisa ser carregado antes do libwayland-client,
+    o que um programa Python só consegue com LD_PRELOAD. No COSMIC, o
+    processo do serviço se reinicia uma vez com a biblioteca pré-carregada.
+    Não mexe em nada nos outros desktops."""
+    if WINDOWS or not is_cosmic() or os.environ.get("MEXERICA_PRELOADED"):
+        return
+    lib = layer_shell_library()
+    if not lib:
+        return
+    env = dict(os.environ, MEXERICA_PRELOADED="1")
+    pre = env.get("LD_PRELOAD", "")
+    if lib not in pre.split(":"):
+        env["LD_PRELOAD"] = f"{lib}:{pre}" if pre else lib
+    os.execve(sys.executable, [sys.executable, "-m", "mexerica", *argv], env)
+
+
 def backend(app):
     if WINDOWS:
         from .windows import WindowsDesktop
         return WindowsDesktop(app)
+    if is_cosmic():
+        from .cosmic import CosmicDesktop
+        return CosmicDesktop(app)
     from .gnome import GnomeDesktop
     return GnomeDesktop(app)

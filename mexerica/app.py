@@ -237,6 +237,9 @@ class Overlay(Gtk.Window):
         return wheel.hit(x, y), wheel.in_cancel(x, y)
 
     def _on_draw(self, _area, cr, w, h) -> None:
+        ready = getattr(self.app.desktop, "ready_to_draw", None)
+        if ready is not None and not ready(self):
+            return        # COSMIC: invisível até saber onde está o ponteiro
         dim = self.app.desktop.overlay_dim
         if dim:
             # sem um compositor que escureça o fundo (Windows), a própria
@@ -294,12 +297,19 @@ class Overlay(Gtk.Window):
             self._animate()
         self._arm_idle_hide()
 
+    def _pointer_seen(self, x: float, y: float) -> None:
+        seen = getattr(self.app.desktop, "pointer_seen", None)
+        if seen is not None:
+            seen(self, x, y)
+
     def _on_drag_enter(self, _t, x, y):
         self._dragging = True
+        self._pointer_seen(x, y)
         self._hover(x, y)
         return Gdk.DragAction.COPY
 
     def _on_drag_motion(self, _t, x, y):
+        self._pointer_seen(x, y)
         self._hover(x, y)
         return Gdk.DragAction.COPY
 

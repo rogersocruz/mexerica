@@ -219,6 +219,51 @@ Para instalar como pacote do sistema, use o PKGBUILD:
 Para conferir o que foi detectado: `mexerica doctor`. Para desinstalar:
 `./uninstall.sh`.
 
+## 🧪 COSMIC (Pop!_OS 24.04+) — experimental
+
+O COSMIC não aceita extensões, então o gesto funciona por outro caminho.
+Ainda **não foi validado numa sessão COSMIC real**: relatos são bem-vindos
+nas [issues](https://github.com/rogersocruz/mexerica/issues).
+
+**Já funciona (sem nada extra):** botão direito no arquivo → **Abrir com →
+Mexerica (roda)**. A roda abre no centro da tela com os arquivos
+selecionados; o clique escolhe. Pelo terminal:
+
+```bash
+mexerica wheel foto.heic              # Converter
+mexerica wheel -m tools video.mp4     # Ferramentas
+mexerica wheel -m actions *.pdf       # Ações
+```
+
+**Shift + arrastar (experimental):** instale a dependência pelo `install.sh`
+normal e depois:
+
+```bash
+sudo apt install gir1.2-gtk4layershell-1.0 wl-clipboard
+sudo usermod -aG input "$USER"        # depois, saia e entre na sessão
+```
+
+- **gtk4-layer-shell:** põe a roda acima de tudo, na mesma camada do painel
+  do COSMIC (protocolo `wlr-layer-shell`). O serviço se reinicia uma vez com
+  a biblioteca pré-carregada (`LD_PRELOAD`), como ela exige em Python.
+- **Grupo `input`:** dá acesso direto ao teclado e ao mouse
+  (`/dev/input`), porque no Wayland só o compositor sabe que um arraste está
+  acontecendo. **Esse grupo permite ler tudo o que é digitado.** A Mexerica
+  só guarda o estado de Shift, Alt, Ctrl e do botão esquerdo, nada mais
+  (`mexerica/desktop/evinput.py`). Se não quiser dar esse acesso, use o
+  "Abrir com".
+
+Como funciona: botão pressionado + ponteiro andando + Shift = a roda nasce
+invisível sobre a tela; quando o arraste passa por cima dela, o primeiro
+evento dá a posição do ponteiro e a roda aparece ali. Se o arraste não
+trouxer arquivos (seleção de texto com Shift), ela some sozinha.
+
+**O que ainda não se sabe:** se o `cosmic-comp` entrega o arraste de
+arquivos para uma superfície de sobreposição. Se a roda aparecer mas não
+receber o drop, é isso. O log fica em `~/.cache/mexerica/mexerica.log`;
+`MEXERICA_DESKTOP=cosmic` força esse backend em outros compositores com
+`wlr-layer-shell` (Sway, Hyprland), para testes.
+
 ## 🪟 Instalação (Windows 10 e 11)
 
 A interface usa o mesmo GTK 4 do Linux, que no Windows vem do
@@ -343,6 +388,10 @@ miniatura dos arquivos. O próprio serviço faz o papel da extensão
 acima de tudo, traz as janelas do serviço para a frente e aplica o vidro.
 Os arquivos chegam pelo próprio drop do GTK quando o arraste passa sobre a
 roda; se o arraste não tiver arquivos (texto, link), a roda some.
+
+No COSMIC (experimental), o serviço lê botão e modificadores direto do
+kernel (`/dev/input`, `evinput.py`) e a roda é uma superfície do
+`wlr-layer-shell`; a regra de abrir e fechar é a mesma (`drag.py`).
 
 O que muda entre os desktops fica em `mexerica/desktop/`; roda, janelas e
 motor são os mesmos.

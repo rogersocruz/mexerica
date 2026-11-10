@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Mexerica (roda)
+Comment=Abre a roda de conversão com os arquivos selecionados
+Exec=@BINDIR@/mexerica wheel %F
+Icon=io.github.rogersocruz.Mexerica
+Terminal=false
+NoDisplay=true
+StartupNotify=false
+MimeType=image/jpeg;image/png;image/webp;image/heic;image/heif;image/avif;image/tiff;image/bmp;image/gif;image/x-icon;image/jxl;image/svg+xml;video/mp4;video/quicktime;video/x-matroska;video/webm;video/x-msvideo;video/x-ms-wmv;video/mpeg;video/3gpp;audio/mpeg;audio/mp4;audio/x-m4a;audio/aac;audio/x-wav;audio/wav;audio/flac;audio/x-flac;audio/ogg;audio/opus;audio/x-aiff;application/pdf;application/msword;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;application/rtf;text/rtf;application/vnd.ms-excel;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.oasis.opendocument.spreadsheet;text/csv;application/vnd.ms-powerpoint;application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.oasis.opendocument.presentation;text/plain;text/markdown;text/html;application/epub+zip;application/x-subrip;text/vtt;text/x-ssa;application/zip;application/x-7z-compressed;application/x-tar;application/gzip;application/x-compressed-tar;application/x-xz;application/zstd;application/vnd.rar;application/x-rar;application/x-xopp;inode/directory;

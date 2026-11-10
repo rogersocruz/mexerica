@@ -16,6 +16,14 @@ make install \
     EXTDIR="$HOME/.local/share/gnome-shell/extensions/$UUID" \
     NAUTILUSDIR="$HOME/.local/share/nautilus/scripts"
 
+DESK="${XDG_CURRENT_DESKTOP:-}"
+case "${DESK,,}" in *cosmic*) COSMIC=1 ;; *) COSMIC=0 ;; esac
+
+update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+
+if [ "$COSMIC" = 1 ]; then
+    : # COSMIC: sem extensão; o serviço faz o papel dela (ver o fim)
+else
 # habilita a extensão (vale no próximo login; no Wayland o Shell não recarrega)
 python3 - "$UUID" <<'PY'
 import ast, subprocess, sys
@@ -31,6 +39,7 @@ if uuid not in cur:
 subprocess.run(["gsettings", "set", "org.gnome.shell",
                 "disable-user-extensions", "false"], check=False)
 PY
+fi
 
 # (re)inicia o serviço
 gapplication action io.github.rogersocruz.Mexerica quit 2>/dev/null || true
@@ -38,6 +47,20 @@ setsid "$BIN" --gapplication-service >/dev/null 2>&1 < /dev/null &
 
 echo
 "$BIN" doctor || true
+
+if [ "$COSMIC" = 1 ]; then
+    cat <<MSG
+
+COSMIC detectado (suporte EXPERIMENTAL).
+  • Já funciona: botão direito no arquivo > Abrir com > "Mexerica (roda)".
+  • Para o Shift + arrastar, faltam duas coisas:
+      sudo apt install gir1.2-gtk4layershell-1.0 wl-clipboard
+      sudo usermod -aG input "\$USER"     # acesso a teclado e mouse
+    O grupo input permite ler tudo o que é digitado; a Mexerica só guarda
+    Shift, Alt, Ctrl e o botão do mouse. Saia e entre na sessão depois.
+MSG
+    exit 0
+fi
 cat <<MSG
 
 Instalado. Falta um passo: SAIA E ENTRE DE NOVO NA SESSÃO para o GNOME

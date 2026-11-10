@@ -30,6 +30,7 @@ install:
 	chmod 755 $(DESTDIR)$(BINDIR)/mexerica
 	install -d $(DESTDIR)$(DATADIR)/applications $(DESTDIR)$(DATADIR)/dbus-1/services
 	$(SUBST) data/$(APP_ID).desktop > $(DESTDIR)$(DATADIR)/applications/$(APP_ID).desktop
+	$(SUBST) data/$(APP_ID).Wheel.desktop > $(DESTDIR)$(DATADIR)/applications/$(APP_ID).Wheel.desktop
 	$(SUBST) data/$(APP_ID).service > $(DESTDIR)$(DATADIR)/dbus-1/services/$(APP_ID).service
 	install -d $(DESTDIR)$(AUTOSTARTDIR)
 	$(SUBST) data/$(APP_ID)-autostart.desktop > $(DESTDIR)$(AUTOSTARTDIR)/$(APP_ID).desktop
@@ -46,6 +47,7 @@ uninstall:
 	rm -rf $(DESTDIR)$(PKGDATADIR) $(DESTDIR)$(EXTDIR)
 	rm -f $(DESTDIR)$(BINDIR)/mexerica \
 	      $(DESTDIR)$(DATADIR)/applications/$(APP_ID).desktop \
+	      $(DESTDIR)$(DATADIR)/applications/$(APP_ID).Wheel.desktop \
 	      $(DESTDIR)$(DATADIR)/dbus-1/services/$(APP_ID).service \
 	      $(DESTDIR)$(AUTOSTARTDIR)/$(APP_ID).desktop \
 	      $(DESTDIR)$(DATADIR)/icons/hicolor/scalable/apps/$(APP_ID).svg
