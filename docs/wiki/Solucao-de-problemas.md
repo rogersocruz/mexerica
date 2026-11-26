@@ -2,9 +2,10 @@
 
 Primeiro, dois diagnósticos:
 
-- `mexerica doctor` (ou **Configurações > Sobre**): quais programas foram
-  encontrados e quem converte os documentos do Office.
-- O **log** (**Configurações > Sobre > Abrir o log**, ou o menu da bandeja):
+- `mexerica doctor`: quais programas foram encontrados e quem converte os
+  documentos do Office. Falta um tipo de arquivo? **Configurações > Sobre >
+  Formatos extras**.
+- O **log** (menu da bandeja ou da barra superior > **Abrir o log**):
   - Windows: `%LOCALAPPDATA%\Mexerica\cache\mexerica.log`
   - Linux: `~/.cache/mexerica/mexerica.log`; a extensão:
     `journalctl --user -f -o cat /usr/bin/gnome-shell`
@@ -14,7 +15,9 @@ Primeiro, dois diagnósticos:
 - **O ícone da Mexerica está na bandeja / barra superior?** Se não, o serviço
   não está rodando: abra "Mexerica" no menu Iniciar / de apps.
 - **GNOME:** depois de instalar, é preciso **sair e entrar** na sessão. Veja
-  o estado da extensão em **Configurações > Sobre**.
+  o estado da extensão com `gnome-extensions info
+  mexerica@rogersocruz.github.io`; **Configurações > Sobre** avisa quando a
+  detecção de arraste está desligada.
 - **Windows, arrastando de um programa que não é o Explorer:** a roda só
   abre em arrastes do shell (Explorer, área de trabalho, diálogos de arquivo
   e apps que usam a imagem de arraste do Windows, como os navegadores).
@@ -26,6 +29,18 @@ Primeiro, dois diagnósticos:
 - **Uma opção esperada não aparece:** o programa dela pode faltar
   (`mexerica doctor`), ela pode não servir para todos os arquivos
   arrastados, ou foi desligada em **Configurações > Itens da roda**.
+
+## A tela fica preta ao abrir a roda (Windows)
+
+Acontecia até a 0.1.1 quando o Windows está sem transparência:
+*Configurações > Personalização > Cores > Efeitos de transparência*
+desligado, ou a **Economia de energia** ligada (o notebook na bateria a
+liga sozinho). O vidro da roda usa o borrão do Windows, e sem
+transparência o Windows pinta essa área de preto, que na roda é o monitor
+inteiro. Desde a 0.2.0 a Mexerica confere isso: sem transparência, a roda
+abre sem borrão e as janelas ficam com fundo sólido. Com a versão antiga,
+ligar os efeitos de transparência (ou sair da Economia de energia)
+resolve.
 
 ## Shift+Alt ou Shift+Ctrl troca o teclado
 

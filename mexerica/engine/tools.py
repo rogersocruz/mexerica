@@ -31,6 +31,7 @@ PROGRAMS: list[tuple[str, str]] = [
     ("pdfimages", "extrair imagens de PDF"), ("qpdf", "juntar/dividir PDF"),
     ("gs", "comprimir PDF (Ghostscript)"),
     ("exiftool", "metadados"), ("zbarimg", "ler QR code (zbar)"),
+    ("qrencode", "gerar QR code"),
     ("bsdtar", "ZIP/7Z/TAR/RAR (libarchive)"),
     ("ffplay", "ouvir o trecho no Cortar…"),
     ("rembg", "remover fundo de fotos com IA (opcional)"),

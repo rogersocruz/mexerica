@@ -203,7 +203,17 @@ def eraser(cr):
     _line(cr, (7.5, 14), (14.5, 14))
 
 
+def unlock(cr):
+    _rrect(cr, 2.5, 7, 11, 8, 1.5)
+    cr.new_sub_path()
+    cr.arc(8, 5, 3.5, math.pi, 2 * math.pi)       # arco aberto: destrancado
+    cr.move_to(4.5, 5)
+    cr.line_to(4.5, 7)
+    _line(cr, (8, 10), (8, 12))
+
+
 ICONS = {
+    "unlock": unlock,
     "crop": crop, "compress": compress, "resize": resize, "tag": tag,
     "sliders": sliders, "image": image, "eye-off": eye_off,
     "rotate": rotate, "scissors": scissors, "qr": qr, "doc": doc,

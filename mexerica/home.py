@@ -19,7 +19,9 @@ from gi.repository import Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from . import history  # noqa: E402
 from . import theme as TH  # noqa: E402
-from .engine import options_for  # noqa: E402
+from .i18n import _  # noqa: E402
+from .editors import open_editor  # noqa: E402
+from .engine import BY_ID, options_for  # noqa: E402
 from .floating import icon_widget  # noqa: E402
 from .settings_window import GROUPS, ICON, _hint, _page, _section  # noqa: E402
 
@@ -38,9 +40,8 @@ class HomePage(Gtk.Box):
         self._added_at = 0.0
 
         page = _page("Início",
-                     "Solte arquivos aqui, ou escolha, para ver tudo o que dá "
-                     "para fazer com eles. Segurar Shift enquanto arrasta "
-                     "continua valendo em qualquer lugar.")
+                     "Solte ou escolha arquivos para ver tudo o que dá para "
+                     "fazer com eles.")
         self.append(page)
 
         self.zone = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
@@ -50,12 +51,23 @@ class HomePage(Gtk.Box):
         logo = Gtk.Image.new_from_file(str(ICON))
         logo.set_pixel_size(52)
         self.empty.append(logo)
-        self.empty.append(Gtk.Label(label="Solte arquivos aqui",
+        self.empty.append(Gtk.Label(label=_("Solte arquivos aqui"),
                                     css_classes=["mx-drop-title"]))
-        pick = Gtk.Button(label="Escolher arquivos…", halign=Gtk.Align.CENTER,
+        pick = Gtk.Button(label=_("Escolher arquivos…"),
+                          halign=Gtk.Align.CENTER,
                           css_classes=["mx-op"])
         pick.connect("clicked", self._choose)
-        self.empty.append(pick)
+        buttons = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER)
+        buttons.append(pick)
+        qr = BY_ID["qr-make"]
+        if qr.is_available():
+            make = Gtk.Button(label=_("Gerar QR code…"),
+                              css_classes=["mx-op"],
+                              tooltip_text=_("De um link colado (ou copiado "
+                                             "antes de abrir)"))
+            make.connect("clicked", lambda *_: open_editor(app, qr, []))
+            buttons.append(make)
+        self.empty.append(buttons)
         self.files = Gtk.Box(spacing=14)
         self.zone.append(self.empty)
         self.zone.append(self.files)
@@ -68,7 +80,7 @@ class HomePage(Gtk.Box):
         title = _section("Recentes")
         title.set_hexpand(True)
         head.append(title)
-        self.clear = Gtk.Button(label="Limpar", css_classes=["flat"])
+        self.clear = Gtk.Button(label=_("Limpar"), css_classes=["flat"])
         self.clear.connect("clicked", self._clear_history)
         head.append(self.clear)
         page.append(head)
@@ -106,7 +118,7 @@ class HomePage(Gtk.Box):
         return bool(paths)
 
     def _choose(self, *_a) -> None:
-        dialog = Gtk.FileDialog(title="Escolher arquivos", modal=True)
+        dialog = Gtk.FileDialog(title=_("Escolher arquivos"), modal=True)
 
         def done(dlg, result):
             try:
@@ -132,7 +144,8 @@ class HomePage(Gtk.Box):
         self.files.append(icon_widget(icon, 48))
         texts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True,
                         valign=Gtk.Align.CENTER)
-        texts.append(Gtk.Label(label=first.name if n == 1 else f"{n} arquivos",
+        texts.append(Gtk.Label(label=first.name if n == 1 else
+                               _("{n} arquivos").format(n=n),
                                xalign=0, css_classes=["mx-drop-title"],
                                ellipsize=Pango.EllipsizeMode.MIDDLE))
         size = sum(p.stat().st_size for p in self.paths if p.is_file())
@@ -142,10 +155,11 @@ class HomePage(Gtk.Box):
                          + ("…" if n > 3 else ""))
         texts.append(_hint(" · ".join(p for p in parts if p)))
         self.files.append(texts)
-        other = Gtk.Button(label="Escolher outros…", valign=Gtk.Align.CENTER)
+        other = Gtk.Button(label=_("Escolher outros…"),
+                           valign=Gtk.Align.CENTER)
         other.connect("clicked", self._choose)
         self.files.append(other)
-        drop = Gtk.Button(label="Limpar", valign=Gtk.Align.CENTER,
+        drop = Gtk.Button(label=_("Limpar"), valign=Gtk.Align.CENTER,
                           css_classes=["flat"])
         drop.connect("clicked", lambda *_: self.set_files([]))
         self.files.append(drop)
@@ -156,14 +170,15 @@ class HomePage(Gtk.Box):
             if not ops:
                 continue
             found = True
-            self.ops.append(_section(f"{title}  ·  na roda: {keys}"))
+            self.ops.append(_section(_("{group}  ·  na roda: {keys}").format(
+                group=_(title), keys=keys)))
             flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
                                column_spacing=6, row_spacing=6,
                                max_children_per_line=10)
             for op in ops:
-                button = Gtk.Button(label=op.label, css_classes=["mx-op"])
+                button = Gtk.Button(label=_(op.label), css_classes=["mx-op"])
                 if op.hint:
-                    button.set_tooltip_text(op.hint)
+                    button.set_tooltip_text(_(op.hint))
                 button.connect("clicked", self._run, op)
                 flow.append(button)
             self.ops.append(flow)
@@ -200,21 +215,21 @@ class HomePage(Gtk.Box):
                         valign=Gtk.Align.CENTER)
         name = outs[0].name
         if len(outs) > 1:
-            name += f" e mais {len(outs) - 1}"
+            name += " " + _("e mais {n}").format(n=len(outs) - 1)
         texts.append(Gtk.Label(label=name, xalign=0,
                                ellipsize=Pango.EllipsizeMode.MIDDLE))
         folder = outs[0].parent
-        parts = [entry.get("label", ""), history.when_text(entry),
+        parts = [_(entry.get("label", "")), history.when_text(entry),
                  folder.name or str(folder)]
         if not there:
-            parts.append("não está mais lá")
+            parts.append(_("não está mais lá"))
         texts.append(_hint(" · ".join(p for p in parts if p)))
         texts.set_tooltip_text(_short(folder))
         row.append(texts)
         uris = [Gio.File.new_for_path(str(p)).get_uri() for p in there]
         for label, action in (
-                ("Abrir", lambda *_: self.app.open_files(uris[:1])),
-                ("Mostrar na pasta", lambda *_: self.app.reveal(uris))):
+                (_("Abrir"), lambda *_a: self.app.open_files(uris[:1])),
+                (_("Mostrar na pasta"), lambda *_a: self.app.reveal(uris))):
             button = Gtk.Button(label=label, valign=Gtk.Align.CENTER,
                                 sensitive=bool(there))
             button.connect("clicked", action)

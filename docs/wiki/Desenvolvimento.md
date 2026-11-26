@@ -68,6 +68,40 @@ gradiente das janelas e do vidro da roda). Ela aparece sozinha em
 só recarrega uma extensão no login; o teste com mocks
 (`tests/extension_logic.test.mjs`) cobre a lógica sem precisar do GNOME.
 
+## Versões
+
+[Versionamento semântico](https://semver.org/lang/pt-BR/), com a versão
+num lugar só: `__version__` em `mexerica/__init__.py`. O pacote da Store
+usa a mesma, com `.0` no fim (`0.2.0` → `0.2.0.0`), e o PKGBUILD repete o
+número em `pkgver`.
+
+| Mudou | Sobe | Exemplo |
+|---|---|---|
+| funcionalidade nova (operação, janela, opção) | MENOR | 0.1.1 → 0.2.0 |
+| só correção | CORREÇÃO | 0.2.0 → 0.2.1 |
+| quebra algo de quem usa (CLI, configurações) | MAIOR | 0.x → 1.0.0 |
+
+Cada versão:
+
+1. Branch a partir da `main` (`feat/…` ou `fix/…`). No primeiro commit,
+   suba `__version__` e o `pkgver` e abra a seção da versão no
+   [CHANGELOG](../../CHANGELOG.md), marcada "não lançada".
+2. Cada mudança visível entra no CHANGELOG no mesmo commit.
+3. Pronta: testes (`make test`), PR e merge na `main`.
+4. Na `main`: data no CHANGELOG, tag e push da tag:
+
+   ```sh
+   git tag -a v0.2.0 -m "Mexerica 0.2.0"
+   git push origin v0.2.0
+   ```
+
+5. Store: no repositório privado (`packaging/msstore`, branch de mesmo
+   nome), `.\build.ps1` gera `dist\Mexerica_0.2.0.0_x64.msix`; o texto
+   de "Novidades desta versão" sai da seção do CHANGELOG.
+
+A Store recusa um pacote com versão menor ou igual à última enviada:
+correção de uma versão já enviada é sempre uma CORREÇÃO nova.
+
 ## Estrutura
 
 Veja [Como funciona](Como-funciona.md). Resumo:

@@ -11,6 +11,8 @@ mexerica list --group tools *.mp4
 mexerica run to-jpg *.heic    # converte sem interface
 mexerica run vid-25mb video.mov
 mexerica run img-crop foto.jpg   # operação com janela: pede ao serviço para abri-la
+mexerica wheel --group tools foto.png  # a roda no ponteiro; o clique escolhe
+mexerica wheel                # roda vazia: arraste um arquivo até ela
 mexerica doctor               # programas encontrados e quem converte o Office
 mexerica --version
 ```

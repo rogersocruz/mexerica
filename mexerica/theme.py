@@ -124,8 +124,36 @@ HOVER_MS = 80
 MODE_FADE_MS = 120
 
 # --------------------------------------------------------------------------
-# Rótulos e ícones da roda (os ids das operações não mudam)
+# Rótulos e ícones da roda (os ids das operações não mudam). Curtos e em
+# caixa alta; um dicionário por idioma (i18n.py). Sem rótulo aqui, vale o
+# nome da operação (o formato, nas conversões).
 # --------------------------------------------------------------------------
+LABELS_PT = {
+    # ferramentas
+    "img-edit": "EDITAR", "img-crop": "RECORTAR", "img-size": "TAMANHO",
+    "img-addbg": "FUNDO", "img-rmbg": "TIRAR FUNDO",
+    "img-compress": "COMPRIMIR", "img-rotate": "GIRAR",
+    "img-qr": "LER QR", "img-pdf": "PARA PDF", "img-collage": "COLAGEM",
+    "vid-trim": "CORTAR", "vid-size": "TAMANHO", "vid-compress": "COMPRIMIR",
+    "vid-mute": "SEM SOM", "vid-2x": "2× VELOC.", "vid-rotate": "GIRAR",
+    "vid-snap": "FOTO", "vid-join": "JUNTAR",
+    "aud-trim": "CORTAR", "aud-normalize": "NORMALIZAR",
+    "aud-compress": "COMPRIMIR", "aud-mono": "MONO", "aud-silence": "SILÊNCIO",
+    "aud-join": "JUNTAR",
+    "vid-720p": "720p",
+    "pdf-pages": "PÁGINAS", "pdf-compress": "COMPRIMIR",
+    "pdf-split": "CADA PÁGINA", "pdf-cut": "DIVIDIR",
+    "pdf-rotate": "GIRAR", "pdf-images": "IMAGENS",
+    "pdf-order": "JUNTAR",           # abre a janela: ordem das páginas
+    "pdf-unlock": "DESBLOQUEAR",
+    "qr-make": "GERAR QR",
+    "strip-meta": "SEM METADADOS", "show-meta": "METADADOS",
+    # ações
+    "act-copy-path": "COPIAR CAMINHO", "act-terminal": "TERMINAL",
+    "act-copy-to": "COPIAR PARA", "act-move-to": "MOVER PARA",
+    "act-float": "FLUTUAR", "act-zip-all": "ZIP",
+    "extract": "EXTRAIR",
+}
 LABELS = {
     # ferramentas
     "img-edit": "EDIT", "img-crop": "CROP", "img-size": "RESIZE",
@@ -139,8 +167,12 @@ LABELS = {
     "aud-compress": "COMPRESS", "aud-mono": "MONO", "aud-silence": "SILENCE",
     "aud-join": "JOIN",
     "vid-720p": "720p",
-    "pdf-pages": "PAGES", "pdf-compress": "COMPRESS", "pdf-split": "SPLIT",
-    "pdf-rotate": "ROTATE", "pdf-images": "IMAGES", "pdf-merge": "MERGE",
+    "pdf-pages": "PAGES", "pdf-compress": "COMPRESS",
+    "pdf-split": "EVERY PAGE", "pdf-cut": "SPLIT",
+    "pdf-rotate": "ROTATE", "pdf-images": "IMAGES",
+    "pdf-order": "MERGE",
+    "pdf-unlock": "UNLOCK",
+    "qr-make": "MAKE QR",
     "strip-meta": "STRIP META", "show-meta": "METADATA",
     # ações
     "act-copy-path": "COPY PATH", "act-terminal": "TERMINAL",
@@ -161,7 +193,8 @@ ICONS = {
     "aud-trim": "scissors", "aud-normalize": "wave", "aud-compress": "compress",
     "aud-mono": "wave", "aud-silence": "wave", "aud-join": "merge",
     "pdf-pages": "pages", "pdf-compress": "compress", "pdf-split": "split",
-    "pdf-rotate": "rotate", "pdf-images": "image", "pdf-merge": "merge",
+    "pdf-cut": "scissors", "pdf-order": "merge", "pdf-unlock": "unlock", "qr-make": "qr",
+    "pdf-rotate": "rotate", "pdf-images": "image",
     "strip-meta": "eye-off", "show-meta": "tag",
     "act-copy-path": "link", "act-terminal": "terminal",
     "act-copy-to": "copy", "act-move-to": "move", "act-float": "pin",
@@ -170,7 +203,9 @@ ICONS = {
 
 
 def wheel_label(op) -> str:
-    return LABELS.get(op.id, op.label).upper()
+    from .i18n import _, language
+    table = LABELS if language() == "en" else LABELS_PT
+    return table.get(op.id, _(op.label)).upper()
 
 
 def wheel_icon(op) -> str | None:
@@ -229,6 +264,11 @@ window.mx-window {
   border: 1px solid alpha(white, 0.45);
 }
 window.mx-window > * { border-radius: %(radius)dpx; }
+/* Windows sem transparência (ou na Economia de energia): sem o borrão
+   do DWM, o vidro vira cor sólida */
+window.mx-window.mx-solid {
+  background: linear-gradient(180deg, %(top)s, %(bottom)s);
+}
 .mx-header { padding: 10px 12px 4px 12px; }
 .mx-title { font-weight: 600; font-size: 13px; color: %(text)s; }
 button.mx-close {
@@ -371,6 +411,21 @@ button.mx-float-close:hover { opacity: 0.88; }
 /* páginas do PDF */
 window.mx-window button.mx-page { padding: 6px; border-radius: 10px; background: alpha(white, 0.30); border: 2px solid transparent; }
 window.mx-window button.mx-page:checked { background: alpha(white, 0.55); border-color: %(orange)s; }
+/* dividir: a página que começa um arquivo novo; fora de todas as partes */
+window.mx-window button.mx-page.mx-cut { border-left: 4px solid %(orange)s; }
+window.mx-window button.mx-page.mx-gone { opacity: 0.4; }
+window.mx-window flowbox.mx-pages flowboxchild { padding: 6px; border-radius: 10px; background: alpha(white, 0.30); border: 2px solid transparent; }
+window.mx-window flowbox.mx-pages flowboxchild:selected { background: alpha(white, 0.60); border-color: %(orange)s; }
+window.mx-window flowbox.mx-pages flowboxchild.mx-dragging { opacity: 0.35; border: 2px dashed %(orange)s; }
+window.mx-window .mx-tile-tools button { min-width: 22px; min-height: 22px; padding: 2px; border-radius: 999px; background: alpha(white, 0.90); }
+window.mx-window .mx-tile-tools button:hover { background: %(orange)s; color: white; }
+/* juntar: lista arrastável */
+window.mx-window list.mx-files { background: transparent; }
+window.mx-window list.mx-files row { border-radius: 10px; margin: 2px 0; background: alpha(white, 0.30); }
+window.mx-window list.mx-files row:selected { background: alpha(white, 0.55); box-shadow: inset 0 0 0 2px %(orange)s; }
+window.mx-window list.mx-files row.mx-over { box-shadow: inset 0 3px 0 %(orange)s; }
+/* QR: fundo branco, para a prévia não sumir no vidro escuro */
+window.mx-window picture.mx-qr { background: white; border-radius: 12px; padding: 10px; }
 """
 CSS = ""
 

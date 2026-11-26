@@ -67,8 +67,10 @@ def test_wheel_only_offers_what_someone_converts(only, tmp_path):
 
 def _text(path):
     if path.suffix == ".pdf":
-        return subprocess.run(T.cmd("pdftotext") + [str(path), "-"],
-                              capture_output=True, text=True).stdout
+        return subprocess.run(T.cmd("pdftotext") + ["-enc", "UTF-8",
+                                                    str(path), "-"],
+                              capture_output=True, text=True,
+                              encoding="utf-8").stdout
     # o Word parte palavras em vários <w:t>: junta os textos dos nós
     with zipfile.ZipFile(path) as z:
         xml = " ".join(z.read(n).decode("utf-8", "replace")

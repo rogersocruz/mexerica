@@ -179,13 +179,20 @@ def text_to_pdf(ctx: Ctx) -> list[Step]:
     return [pandoc(ctx.src, ctx.out, "pdf")]
 
 
+def _win(path) -> str:
+    """Caminho com barras invertidas, para programas do Windows."""
+    return str(path).replace("/", "\\")
+
+
 def _ms(family: str, src: Path, ext: str) -> Step:
     app = _MS_APP[family][0]
 
     def run(c: Ctx) -> None:
+        # caminhos com "\": o Python do MSYS2 escreve "C:/..." e o SaveAs
+        # do Excel entende errado ("mesmo nome de uma pasta aberta")
         argv = [_powershell(), "-NoProfile", "-NonInteractive",
-                "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT), app,
-                str(Path(src).resolve()), str(Path(c.out).resolve()), ext]
+                "-ExecutionPolicy", "Bypass", "-File", _win(SCRIPT), app,
+                _win(Path(src).resolve()), _win(Path(c.out).resolve()), ext]
         log.info("$ %s", " ".join(argv))
         try:
             proc = subprocess.run(argv, capture_output=True, text=True,

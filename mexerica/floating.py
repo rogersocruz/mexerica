@@ -19,6 +19,7 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, Gtk, Pango  # noqa: E402
 
 from . import theme as TH  # noqa: E402
+from .i18n import _  # noqa: E402
 from .wheel.render import draw_disc  # noqa: E402
 
 # "Mexerica — " deixa a janela acima das outras (extensão do GNOME e backend
@@ -34,7 +35,8 @@ CLOSE_PX = 26
 class FloatWindow(Gtk.Window):
     def __init__(self, app, paths: list[Path]):
         n = len(paths)
-        name = app.desktop.display_name(paths[0]) if n == 1 else f"{n} arquivos"
+        name = app.desktop.display_name(paths[0]) if n == 1 else (
+            _("{n} arquivos").format(n=n))
         super().__init__(application=app, title=TITLE_PREFIX + name,
                          decorated=False, resizable=False)
         self.add_css_class("mx-float")
@@ -44,8 +46,9 @@ class FloatWindow(Gtk.Window):
         self.disc = Gtk.DrawingArea(content_width=WIDTH, content_height=AREA_H)
         self.disc.set_draw_func(self._draw)
         self.disc.set_cursor_from_name("grab")
-        self.disc.set_tooltip_text("Arraste para levar o arquivo"
-                                   if n == 1 else "Arraste para levar os arquivos")
+        self.disc.set_tooltip_text(_("Arraste para levar o arquivo")
+                                   if n == 1 else
+                                   _("Arraste para levar os arquivos"))
         motion = Gtk.EventControllerMotion()
         motion.connect("enter", lambda *_: self._set_hover(1.0))
         motion.connect("leave", lambda *_: self._set_hover(0.0))
@@ -57,7 +60,7 @@ class FloatWindow(Gtk.Window):
         icon.set_valign(Gtk.Align.START)
         icon.set_margin_top(CY - ICON_PX // 2)
 
-        close = Gtk.Button(label="×", tooltip_text="Fechar")
+        close = Gtk.Button(label="×", tooltip_text=_("Fechar"))
         close.add_css_class("mx-float-close")
         close.set_size_request(CLOSE_PX, CLOSE_PX)
         close.set_halign(Gtk.Align.START)
@@ -70,7 +73,7 @@ class FloatWindow(Gtk.Window):
         grip.set_draw_func(_draw_move)
         grip.add_css_class("mx-float-move")
         grip.set_cursor_from_name("move")
-        move = Gtk.WindowHandle(child=grip, tooltip_text="Arraste para mover",
+        move = Gtk.WindowHandle(child=grip, tooltip_text=_("Arraste para mover"),
                                 halign=Gtk.Align.START, valign=Gtk.Align.START)
         move.set_margin_start(CX - R - CLOSE_PX // 2)        # às 9 horas
         move.set_margin_top(CY - CLOSE_PX // 2)
@@ -91,7 +94,7 @@ class FloatWindow(Gtk.Window):
                           max_width_chars=16, justify=Gtk.Justification.CENTER)
         label.add_css_class("mx-float-label")
         handle = Gtk.WindowHandle(child=label, halign=Gtk.Align.CENTER,
-                                  tooltip_text="Arraste para mover a janela")
+                                  tooltip_text=_("Arraste para mover a janela"))
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0,
                       margin_bottom=6)

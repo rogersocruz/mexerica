@@ -144,6 +144,134 @@ def test_float_drag_carries_the_files(tmp_path, names):
         paths.append(p)
     obj = win32.file_data_object(paths)
     try:
-        assert dropped_paths(obj) == [str(p) for p in paths]
+        # o shell devolve os caminhos com \ (o win_path converte)
+        assert dropped_paths(obj) == [win32.win_path(p) for p in paths]
     finally:
         win32.com_release(obj)
+
+
+# ------------------------------------------------ vidro sem transparência
+
+class _Key:
+    def __init__(self, value):
+        self.value = value
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+@pytest.mark.parametrize("registry, saver, expected", [
+    (1, 0, True),            # transparência ligada, sem Economia de energia
+    (0, 0, False),           # desligada nas Configurações
+    (1, 1, False),           # Economia de energia (notebook na bateria)
+    (None, 0, True),         # sem o valor no registro: padrão é ligada
+])
+def test_transparency_on(monkeypatch, registry, saver, expected):
+    import winreg
+
+    def open_key(_root, path):
+        if registry is None:
+            raise FileNotFoundError(path)
+        return _Key(registry)
+    monkeypatch.setattr(winreg, "OpenKey", open_key)
+    monkeypatch.setattr(winreg, "QueryValueEx",
+                        lambda key, _name: (key.value, 4))
+
+    class K32:
+        @staticmethod
+        def GetSystemPowerStatus(ptr):
+            ctypes.cast(ptr, ctypes.POINTER(
+                win32.SYSTEM_POWER_STATUS)).contents.SystemStatusFlag = saver
+            return 1
+    monkeypatch.setattr(win32, "kernel32", K32)
+    assert win32.transparency_on() is expected
+
+
+def test_no_blur_without_transparency(monkeypatch):
+    """Com a transparência desligada, o DWM pintaria de preto a área do
+    borrão (a roda cobre o monitor todo): o borrão é desligado."""
+    states = []
+    monkeypatch.setattr(win32, "_accent", lambda _h, s: states.append(s))
+    monkeypatch.setattr(win32, "_dwm_uint", lambda *a: None)
+    monkeypatch.setattr(win32, "transparency_on", lambda: False)
+    assert win32.set_glass(1, rounded=False) is False
+    monkeypatch.setattr(win32, "transparency_on", lambda: True)
+    assert win32.set_glass(1, rounded=True) is True
+    assert states == [win32.ACCENT_DISABLED, win32.ACCENT_ENABLE_BLURBEHIND]
+
+
+# -------------------------------- Ctrl + botão direito x Shift + arrastar
+
+@pytest.mark.parametrize("right_click,opens", [(False, True), (True, False)])
+def test_shift_drag_off_when_right_click_wheel_on(monkeypatch, right_click,
+                                                  opens):
+    """Os dois jeitos de abrir a roda não convivem: com o Ctrl + botão
+    direito ligado, um Shift + arrastar não abre a roda."""
+    from mexerica import settings
+    from mexerica.desktop import drag as D
+    from mexerica.desktop import windows
+    settings.update(right_click_wheel=right_click)
+    shown = []
+
+    class App:
+        overlay = None
+
+        def show_wheel(self, mode, paths):
+            shown.append(mode)
+
+        def hide_wheel(self):
+            pass
+
+    desk = windows.WindowsDesktop(App())
+    W = windows.W
+    monkeypatch.setattr(W, "primary_button_down", lambda: True)
+    monkeypatch.setattr(W, "drag_image", lambda: 1234)
+    monkeypatch.setattr(W, "modifiers", lambda: (True, False, False))
+    monkeypatch.setattr(W, "pointer", lambda: (100, 100))
+    clock = iter(range(0, 10_000, 50))
+    monkeypatch.setattr(windows.time, "monotonic", lambda: next(clock) / 1000)
+    for _ in range(20):                 # ~1 s de arraste com Shift
+        desk._poll()
+    assert bool(shown) is opens
+    if opens:
+        assert shown[0] == D.CONVERT
+
+
+# ------------------------------------------- executável com o nome Mexerica
+
+def _file_description(path):
+    ver = ctypes.WinDLL("version")
+    size = ver.GetFileVersionInfoSizeW(str(path), None)
+    buf = ctypes.create_string_buffer(size)
+    assert ver.GetFileVersionInfoW(str(path), 0, size, buf)
+    out, n = ctypes.c_void_p(), ctypes.c_uint()
+    # o idioma/código de página que o arquivo declara (Translation)
+    assert ver.VerQueryValueW(buf, r"\VarFileInfo\Translation",
+                              ctypes.byref(out), ctypes.byref(n))
+    lang, cp = ctypes.cast(out, ctypes.POINTER(ctypes.c_ushort * 2))[0]
+    key = rf"\StringFileInfo\{lang:04X}{cp:04X}\FileDescription"
+    if not ver.VerQueryValueW(buf, key, ctypes.byref(out), ctypes.byref(n)):
+        return ""
+    return ctypes.wstring_at(out.value)
+
+
+def test_branded_exe_shows_mexerica(tmp_path):
+    """O Gerenciador de Tarefas mostra a FileDescription do executável: a
+    cópia do pythonw.exe precisa dizer "Mexerica" e ter o ícone dela."""
+    from mexerica.desktop import branding
+    src = Path(sys.executable).with_name("pythonw.exe")
+    if not src.exists():
+        pytest.skip("sem pythonw.exe")
+    ico = Path(__file__).resolve().parents[1] / \
+        "data/icons/io.github.rogersocruz.Mexerica.ico"
+    dst = tmp_path / "mexerica-app.exe"
+    branding.brand(src, dst, ico, "0.2.0")
+    assert _file_description(dst) == "Mexerica"
+    assert _file_description(src) != "Mexerica"        # o original intacto
+    groups = branding._existing(dst, branding.RT_GROUP_ICON)
+    assert groups == [(1, branding.LANG_EN_US)]
+    # o manifesto do Python continua lá (DPI, caminhos longos)
+    assert branding._existing(dst, 24) == branding._existing(src, 24)

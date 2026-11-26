@@ -3,7 +3,7 @@
 testes)."""
 import pytest
 
-from mexerica import history, settings
+from mexerica import history, i18n, settings
 
 
 @pytest.fixture(autouse=True)
@@ -19,3 +19,9 @@ def isolated_history(tmp_path_factory, monkeypatch):
     path = tmp_path_factory.mktemp("cache") / "history.json"
     monkeypatch.setattr(history, "path", lambda: path)
     return path
+
+
+@pytest.fixture(autouse=True)
+def portuguese(monkeypatch):
+    """Os testes conferem os textos em português, em qualquer sistema."""
+    monkeypatch.setattr(i18n, "_lang", "pt")

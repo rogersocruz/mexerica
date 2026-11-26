@@ -158,8 +158,12 @@ trabalho segue com notificação, como as outras operações.
   o ffplay), normalizar (EBU R128, −16 LUFS), comprimir, mono e tirar
   silêncio. Com vários: juntar.
 - **PDF:** *Páginas…* (miniaturas; extrair, apagar ou girar as
-  selecionadas), comprimir (Ghostscript), dividir por página, girar 90° e
-  extrair imagens. Com vários: juntar.
+  selecionadas), *Dividir…* (por intervalos como `1-3, 4-8, 9-`, clicando
+  nas páginas onde cortar, ou a cada N páginas), comprimir (Ghostscript),
+  girar 90° e extrair imagens. Com vários: *Juntar*, que mostra todas as
+  páginas para reordenar, girar e apagar antes.
+- **Links:** *Gerar QR…* para `.url`, `.webloc`, `.txt`, `.md` e `.html`
+  (acha os links do arquivo) e, em Início, para um link colado. PNG ou SVG.
 - **Qualquer mídia:** ver metadados ou remover metadados (EXIF, GPS, autor).
 
 Os presets antigos (`img-1mb`, `img-half`, `img-flip`, `img-gray`,
@@ -203,7 +207,7 @@ na hora. Detalhes na [wiki](docs/wiki/Configuracoes.md).
 sudo pacman -S --needed python-gobject gtk4
 # conversores (instale os que quiser; a roda se adapta)
 sudo pacman -S --needed ffmpeg imagemagick libheif librsvg poppler qpdf \
-    ghostscript perl-image-exiftool zbar pandoc-cli typst libreoffice-fresh
+    ghostscript perl-image-exiftool zbar qrencode pandoc-cli typst libreoffice-fresh
 
 git clone https://github.com/rogersocruz/mexerica
 cd mexerica
@@ -242,7 +246,7 @@ O que é instalado:
 | Opção         | Programas                                                        | Para quê |
 |---------------|------------------------------------------------------------------|----------|
 | sempre        | MSYS2 (se faltar), Python 3, GTK 4, PyGObject, pycairo e os ícones Adwaita, com as dependências deles | a roda e as janelas |
-| `-Converters` | pelo MSYS2: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar, libarchive e typst | vídeo e áudio, imagens (HEIC/AVIF, SVG), PDF, QR code, ZIP/7Z/RAR, PDF de documentos sem Office |
+| `-Converters` | pelo MSYS2: ffmpeg, ImageMagick, libheif, librsvg, poppler, qpdf, Ghostscript, zbar, qrencode, libarchive e typst | vídeo e áudio, imagens (HEIC/AVIF, SVG), PDF, QR code, ZIP/7Z/RAR, PDF de documentos sem Office |
 | `-Converters` | pelo winget: Pandoc e ExifTool                                   | Markdown/HTML/EPUB, documentos sem Office e metadados |
 | `-Office`     | pelo winget: LibreOffice (~350 MB), **opcional**                 | Pages, Keynote, Numbers e WordPerfect (veja abaixo) |
 
@@ -438,12 +442,37 @@ precisa dos tipos de entrada que aceita, dos programas que usa e de um
 ### Roadmap
 1. Validar numa sessão GNOME real (multi-monitor, escala fracionária).
 2. Janela de progresso com cancelamento para jobs longos.
-3. Tarjar/borrar áreas no *Editar…*; reordenar páginas no *Páginas…*.
+3. Tarjar/borrar áreas no *Editar…*.
 4. Configurações: escolher a tecla de cada roda (o resto já está em
    Configurações).
 5. Menu de serviço do Dolphin e Nautilus Scripts reaproveitando o motor.
 
 A lista detalhada está em [TODO.md](TODO.md).
+
+## 🤖 Uso de IA no desenvolvimento
+
+A Mexerica é escrita com ajuda de um assistente de código (Claude, da
+Anthropic). Os commits feitos assim levam a linha
+`Co-Authored-By: Claude` e podem ser vistos no histórico.
+
+**Onde a IA entra:** propor e escrever código, testes e documentação a partir
+do que o mantenedor pede; investigar bugs; revisar mudanças.
+
+**O que não muda por causa disso:**
+
+- Toda mudança é lida, testada (`make test`) e experimentada numa sessão
+  real pelo mantenedor antes de entrar. Quem responde pelo código é ele.
+- O aplicativo **não usa IA nem rede** para funcionar: tudo roda local, com
+  os programas listados por `mexerica doctor` ([PRIVACY.md](PRIVACY.md)). A
+  rede só é usada quando você pede para baixar um formato extra.
+- Nenhum dado de usuário, arquivo ou log é enviado a serviços de IA.
+
+## 🤝 Contribuindo
+
+Issues e pull requests são bem-vindos. Antes de abrir um PR, leia o
+[CONTRIBUTING.md](CONTRIBUTING.md): uma mudança por PR, testes passando,
+entrada no [CHANGELOG](CHANGELOG.md) e, se você usou IA, diga onde e confirme
+que testou o resultado de verdade.
 
 ## 📄 Licença
 

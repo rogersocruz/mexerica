@@ -11,11 +11,13 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 
 log = logging.getLogger("mexerica")
 
 DEFAULTS: dict = {
+    "language": "system",      # system (idioma do sistema) | pt | en
     "style": "mexerica",       # paleta (theme.STYLES)
     "wheel_size": "medium",    # small | medium | large
     "window_opacity": 92,      # % das janelas de vidro
@@ -26,11 +28,32 @@ DEFAULTS: dict = {
     "output": "beside",        # beside (ao lado do original) | folder
     "output_folder": "",
     "jpeg_quality": 92,
+    # qualidade das conversões de imagem (o Editar… e os presets têm a sua)
+    "webp_quality": 85,
+    "webp_lossless": False,
+    "avif_quality": 60,
+    "heic_quality": 70,
+    "jxl_quality": 85,
+    "png_compression": 7,      # 0..9, sem perda: só tamanho x tempo
+    # vidro atrás da roda: system (borrão do Windows/GNOME), custom (a
+    # própria Mexerica captura e borra a tela, em memória) ou off
+    "blur": "system",
+    "blur_radius": 18,         # px do borrão custom (e do GNOME)
+    # Windows: a roda de ações com Ctrl + botão direito sobre arquivos
+    "right_click_wheel": False,
     "notify_start": True,      # notificação quando um trabalho começa
     # versão da Microsoft Store: a StartupTask do pacote sempre sobe o
     # serviço, que sai na hora se isto estiver desligado
     "autostart": True,
     "hotkeys_asked": False,    # o aviso dos atalhos de teclado já apareceu
+    # Gerar QR code > Personalizar: a última escolha (edits.QrStyle)
+    "qr_fg": "#000000",
+    "qr_bg": "#FFFFFF",
+    "qr_transparent": False,
+    "qr_size": 600,
+    "qr_margin": 4,
+    "qr_level": "M",
+    "qr_fmt": "png",
 }
 WHEEL_SCALE = {"small": 0.85, "medium": 1.0, "large": 1.2}
 
@@ -58,9 +81,23 @@ def load() -> dict:
         return data
     if isinstance(saved, dict):
         for key, value in saved.items():
-            if key in DEFAULTS and type(value) is type(DEFAULTS[key]):
-                data[key] = value
+            if key in DEFAULTS:
+                value = _coerce(value, DEFAULTS[key])
+                if value is not None:
+                    data[key] = value
     return data
+
+
+def _coerce(value, default):
+    """O valor no tipo do padrão, ou None. Número inteiro gravado como
+    float (92.0, de um slider ou de outra versão) vale como int."""
+    if type(value) is type(default):
+        return value
+    if type(default) is int and type(value) is float and value.is_integer():
+        return int(value)
+    if type(default) is float and type(value) is int:
+        return float(value)
+    return None
 
 
 def get() -> dict:
@@ -70,19 +107,51 @@ def get() -> dict:
     return _cache
 
 
-def update(**changes) -> dict:
-    """Muda, grava (substituindo o arquivo de uma vez) e devolve tudo."""
+def stage(**changes) -> dict:
+    """Muda só na memória (vale na hora para este processo); flush() grava.
+    Os sliders usam isto: um arraste gera dezenas de mudanças."""
+    global _cache
     data = dict(get())
     data.update(changes)
-    target = path()
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False),
-                   encoding="utf-8")
-    os.replace(tmp, target)
-    global _cache
     _cache = data
     return data
+
+
+def update(**changes) -> dict:
+    """Muda, grava (substituindo o arquivo de uma vez) e devolve tudo."""
+    data = stage(**changes)
+    flush()
+    return data
+
+
+def flush() -> bool:
+    """Grava o que está na memória. No Windows o replace falha quando outro
+    programa (antivírus, indexador, a extensão lendo) segura o arquivo por
+    um instante: tenta de novo antes de desistir. A mudança continua valendo
+    na memória mesmo se a gravação falhar, e a próxima tentativa leva tudo."""
+    data = get()
+    target = path()
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False),
+                       encoding="utf-8")
+    except OSError as exc:
+        log.warning("não deu para gravar as configurações: %s", exc)
+        return False
+    for attempt in range(5):
+        try:
+            os.replace(tmp, target)
+            return True
+        except PermissionError as exc:
+            if attempt == 4:
+                log.warning("configurações não gravadas (%s): arquivo "
+                            "ocupado", exc)
+            time.sleep(0.05 * (attempt + 1))
+        except OSError as exc:
+            log.warning("configurações não gravadas: %s", exc)
+            break
+    return False
 
 
 def reset(*keys: str) -> dict:

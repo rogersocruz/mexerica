@@ -92,3 +92,49 @@ def test_render_each_wheel(tmp_path, mode, files):
     assert out.stat().st_size > 5000
     if mode != "convert":
         assert all(i for i in st.icons), "ferramentas e ações têm ícone"
+
+
+def test_backdrop_blur_smooths_and_scales():
+    import cairo
+    from mexerica.wheel import backdrop as B
+    assert B.levels_for(0) == 0 and B.levels_for(4) == 2
+    assert B.levels_for(18) == 4 and B.levels_for(40) == 5
+    w, h = 320, 200
+    src = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
+    cr = cairo.Context(src)
+    for y in range(0, h, 8):                       # xadrez preto e branco
+        for x in range(0, w, 8):
+            v = float((x // 8 + y // 8) % 2)
+            cr.set_source_rgb(v, v, v)
+            cr.rectangle(x, y, 8, 8)
+            cr.fill()
+    assert B.blur(src, 0) is src                   # desligado: igual
+    small = B.blur(src, 18)
+    assert small.get_width() < w and small.get_height() < h
+    out = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
+    B.paint_backdrop(cairo.Context(out), small, w, h)
+    out.flush()
+    data, stride = out.get_data(), out.get_stride()
+    greens = [data[y * stride + x * 4 + 1]
+              for y in range(20, h - 20, 7) for x in range(20, w - 20, 7)]
+    # o xadrez vira quase cinza uniforme
+    assert max(greens) - min(greens) < 60
+    assert 90 < sum(greens) / len(greens) < 165
+
+
+def test_live_drag_order():
+    """Organizador de páginas: o bloco arrastado abre espaço ao vivo e não
+    fica pulando quando o ponteiro cai sobre ele mesmo."""
+    pytest = __import__("pytest")
+    pdf = pytest.importorskip("mexerica.editors.pdf")
+    a, b, c, d, e = "abcde"
+    items = [a, b, c, d, e]
+    assert pdf.live_order(items, [b], d) == [a, c, d, b, e]   # para frente
+    assert pdf.live_order(items, [d], a) == [d, a, b, c, e]   # para trás
+    assert pdf.live_order(items, [b], b) == items             # sobre si
+    # bloco não contíguo vira um bloco só, na ordem da grade
+    assert pdf.live_order(items, [e, b], c) == [a, c, b, e, d]
+    # estável: depois de mover, o alvo do lado oposto não desfaz a troca
+    moved = pdf.live_order(items, [b], c)
+    assert moved == [a, c, b, d, e]
+    assert pdf.live_order(moved, [b], b) == moved

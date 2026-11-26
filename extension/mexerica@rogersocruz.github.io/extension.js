@@ -66,20 +66,61 @@ function modeFor(mods) {
 }
 
 // Configurações do serviço (~/.config/mexerica/settings.json); daqui só sai
-// o quanto a tela escurece atrás da roda.
-function overlayBrightness() {
-    let dim = OVERLAY_DIM;
+// o vidro atrás da roda: quanto a tela escurece ("dim", %) e o borrão
+// ("blur": system | custom | off; "blur_radius" em px, 0..40). No GNOME o
+// borrão é sempre o do Shell; "custom" só muda a intensidade, como
+// "system".
+function overlayLook() {
+    let dim = OVERLAY_DIM, radius = OVERLAY_BLUR_RADIUS;
     try {
         const file = GLib.build_filenamev([GLib.get_user_config_dir(),
             'mexerica', 'settings.json']);
         const [, bytes] = GLib.file_get_contents(file);
-        const value = JSON.parse(new TextDecoder().decode(bytes)).dim;
-        if (Number.isFinite(value))
-            dim = Math.min(Math.max(value, 0), 90);
+        const cfg = JSON.parse(new TextDecoder().decode(bytes));
+        if (Number.isFinite(cfg.dim))
+            dim = Math.min(Math.max(cfg.dim, 0), 90);
+        if (Number.isFinite(cfg.blur_radius))
+            radius = Math.round(Math.min(Math.max(cfg.blur_radius, 0), 40) * 1.5);
+        if (cfg.blur === 'off')
+            radius = 0;
     } catch {
         // sem arquivo ou ilegível: o padrão
     }
-    return 1 - dim / 100;
+    return {brightness: 1 - dim / 100, radius};
+}
+
+// Idioma do menu: o mesmo do serviço ("language" nas Configurações: system,
+// pt ou en). Em "system", português se o GNOME estiver em português.
+const MENU_EN = {
+    'Abrir a Mexerica': 'Open Mexerica',
+    'Configurações…': 'Settings…',
+    'Abrir o log': 'Open the log',
+    'Sair da Mexerica': 'Quit Mexerica',
+};
+
+function menuLanguage() {
+    let choice = 'system';
+    try {
+        const file = GLib.build_filenamev([GLib.get_user_config_dir(),
+            'mexerica', 'settings.json']);
+        const [, bytes] = GLib.file_get_contents(file);
+        choice = JSON.parse(new TextDecoder().decode(bytes)).language ?? 'system';
+    } catch {
+        // sem arquivo: o idioma do sistema
+    }
+    if (choice === 'pt' || choice === 'en')
+        return choice;
+    const names = GLib.get_language_names?.() ?? [];
+    const first = names.find(n => n && n !== 'C' && n !== 'POSIX') ?? 'pt';
+    return first.toLowerCase().startsWith('pt') ? 'pt' : 'en';
+}
+
+function tr(text) {
+    return menuLanguage() === 'en' ? MENU_EN[text] ?? text : text;
+}
+
+function overlayBrightness() {
+    return overlayLook().brightness;
 }
 
 function isOurs(win) {
@@ -162,7 +203,7 @@ export default class MexericaExtension extends Extension {
             style_class: 'system-status-icon',
         }));
         const item = (label, action) => {
-            const entry = new PopupMenu.PopupMenuItem(label);
+            const entry = new PopupMenu.PopupMenuItem(tr(label));
             entry.connect('activate', () => this._callApp(action, null));
             button.menu.addMenuItem(entry);
         };
@@ -406,10 +447,11 @@ export default class MexericaExtension extends Extension {
                 duration: BLUR_FADE_MS,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             };
+            const look = overlayLook();
             actor.ease_property(`@effects.${BLUR_EFFECT}.radius`,
-                OVERLAY_BLUR_RADIUS, ease);
+                look.radius, ease);
             actor.ease_property(`@effects.${BLUR_EFFECT}.brightness`,
-                overlayBrightness(), ease);
+                look.brightness, ease);
         });
     }
 

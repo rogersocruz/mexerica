@@ -21,8 +21,7 @@ Office faz o PDF; sem Office, o typst faz o PDF direto.
 A roda só oferece o que alguém na máquina consegue converter: sem Office, por
 exemplo, uma planilha `.ods` não mostra nada, e um `.xlsx` só mostra PDF.
 
-`mexerica doctor` e **Configurações > Sobre** mostram quem converte cada tipo
-nesta máquina:
+`mexerica doctor` mostra quem converte cada tipo nesta máquina:
 
 ```
 Textos → PDF: Microsoft Office

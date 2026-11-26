@@ -30,6 +30,7 @@ EXT_UUID = "mexerica@rogersocruz.github.io"
 class GnomeDesktop:
     name = "GNOME"
     overlay_dim = 0.0        # quem escurece a tela atrás da roda é a extensão
+    overlay_backdrop = None  # e quem borra também
 
     def __init__(self, app):
         self.app = app
@@ -54,6 +55,12 @@ class GnomeDesktop:
         # posição real da janela (abaixo da barra superior).
         win.maximize()
         win.present()
+
+    def anchor_at(self, point) -> None:
+        """A roda por clique abre no ponteiro (a extensão posiciona)."""
+
+    def set_right_click(self, enabled: bool) -> None:
+        """Ctrl + clique direito é só do Windows."""
 
     def wheel_center(self, win, w: float, h: float):
         return None          # a extensão manda o centro na ação `show`
@@ -196,8 +203,9 @@ class GnomeDesktop:
     def withdraw(self, nid) -> None:
         self.app.withdraw_notification(nid)
 
-    def status(self) -> str:
-        return f"Extensão do GNOME Shell: <b>{_extension_state()}</b>"
+    def drag_ok(self) -> bool | None:
+        """A extensão (quem percebe o arraste) está ativa?"""
+        return _extension_state() == 1
 
 
 _DESKTOP_FILE = "io.github.rogersocruz.Mexerica.desktop"
@@ -218,7 +226,8 @@ def _session() -> Gio.DBusConnection:
     return Gio.bus_get_sync(Gio.BusType.SESSION, None)
 
 
-def _extension_state() -> str:
+def _extension_state() -> int | None:
+    """Estado da extensão no GNOME Shell (1 = ativa); None sem ela."""
     try:
         reply = _session().call_sync(
             "org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
@@ -226,11 +235,6 @@ def _extension_state() -> str:
             GLib.Variant("(s)", (EXT_UUID,)), None,
             Gio.DBusCallFlags.NONE, 1000, None)
         info = reply.unpack()[0]
-        if not info:
-            return "não instalada"
-        state = int(info.get("state", 0))
-        return {1: "ativa", 2: "desativada", 3: "com erro",
-                4: "desatualizada", 6: "inicializada"}.get(state,
-                                                           f"estado {state}")
+        return int(info.get("state", 0)) if info else None
     except GLib.Error:
-        return "GNOME Shell não encontrado"
+        return None

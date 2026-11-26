@@ -71,14 +71,15 @@ def when_text(entry: dict, now: dt.datetime | None = None) -> str:
         then = dt.datetime.fromisoformat(entry["time"])
     except (KeyError, ValueError):
         return ""
+    from .i18n import _
     now = now or dt.datetime.now()
     secs = (now - then).total_seconds()
     if secs < 60:
-        return "agora"
+        return _("agora")
     if secs < 3600:
-        return f"há {int(secs // 60)} min"
+        return _("há {n} min").format(n=int(secs // 60))
     if then.date() == now.date():
-        return f"há {int(secs // 3600)} h"
+        return _("há {n} h").format(n=int(secs // 3600))
     if (now.date() - then.date()).days == 1:
-        return "ontem"
-    return then.strftime("%d/%m/%Y")
+        return _("ontem")
+    return then.strftime(_("%d/%m/%Y"))
