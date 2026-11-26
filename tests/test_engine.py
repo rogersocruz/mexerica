@@ -203,7 +203,9 @@ def test_pdf(pdf, d):
     split = _one(run(BY_ID["pdf-split"], [pdf]))
     assert sorted(p.name for p in split.iterdir()) == ["pagina-1.pdf",
                                                        "pagina-2.pdf"]
-    merged = _one(run(BY_ID["pdf-merge"], [pdf, split / "pagina-1.pdf"]))
+    from mexerica.engine import edits as E
+    merged = _one(run(E.pdf_merge_op(BY_ID["pdf-order"]),
+                      [pdf, split / "pagina-1.pdf"]))
     assert merged.stat().st_size > 0
     _one(run(BY_ID["pdf-compress"], [pdf]))
     _one(run(BY_ID["pdf-rotate"], [pdf]))
@@ -502,9 +504,98 @@ def test_pdf_editors_in_wheel(pdf, d):
     one = [o.id for o in options_for([pdf], TOOLS)]
     two = [o.id for o in options_for([pdf, other], TOOLS)]
     assert one[:2] == ["pdf-pages", "pdf-cut"] and "pdf-order" not in one
-    assert "pdf-order" in two and "pdf-merge" in two
+    assert "pdf-order" in two and "pdf-unlock" in two
+    # Juntar sempre abre a tela de ordem: o MERGE direto saiu da roda
+    # um Juntar só: o que abre a janela (o direto, sem tela, saiu)
+    assert "pdf-merge" not in BY_ID
+    assert [o.label for o in options_for([pdf, other], TOOLS)
+            if o.id == "pdf-order"] == ["Juntar"]
     assert "pdf-cut" not in two                       # um PDF por vez
     assert "pdf-split" not in one and "pdf-split" in BY_ID   # fora da roda
+
+
+def test_organize_args_groups_and_rotations():
+    from mexerica.engine import edits as E
+    a, b = Path("a.pdf"), Path("b.pdf")
+    R = E.PageRef
+    pages = [R(0, 1), R(0, 2), R(0, 3), R(1, 2, 90), R(1, 1),
+             R(0, 5, 180), R(0, 4, 450)]
+    args = E.organize_args([a, b], pages, Path("out.pdf"))
+    assert args == ["--empty", "--pages", "a.pdf", "1-3", "b.pdf", "2,1",
+                    "a.pdf", "5,4", "--", "--rotate=+90:4,7",
+                    "--rotate=+180:6", "out.pdf"]
+    # 360° é não girar; sem páginas, erro
+    assert not any(x.startswith("--rotate") for x in E.organize_args(
+        [a], [R(0, 1, 360)], Path("o.pdf")))
+    with pytest.raises(ValueError):
+        E.organize_args([a], [], Path("o.pdf"))
+
+
+def _rotations(path):
+    """Rotação de cada página, pelo pdfinfo ('Page    2 rot:  90')."""
+    if not T.has("pdfinfo"):
+        return None
+    out = subprocess.run(T.cmd("pdfinfo") + ["-f", "1", "-l", "999",
+                                             str(path)],
+                         capture_output=True, text=True).stdout
+    import re
+    return [int(m) for m in re.findall(r"^Page\s+\d+\s+rot:\s+(\d+)", out,
+                                       re.M)]
+
+
+@need("qpdf", "pdftotext")
+def test_organize_merge_reorders_rotates_and_deletes(pdf, d):
+    """Juntar: páginas de dois arquivos misturadas, uma apagada, uma
+    girada."""
+    from mexerica.engine import edits as E
+    other = d / "outro.pdf"
+    shutil.copy(pdf, other)
+    R = E.PageRef
+    # outro p.2, doc p.1 (girada 90°), outro p.1; doc p.2 ficou de fora
+    refs = [R(1, 2), R(0, 1, 90), R(1, 1)]
+    out = _one(run(E.pdf_organize_op(BY_ID["pdf-order"], refs,
+                                     suffix=" Merged"), [pdf, other]))
+    assert out.name == "doc Merged.pdf" and E.page_count(out) == 3
+    texts = [subprocess.run(T.cmd("pdftotext") + [
+        "-f", str(i), "-l", str(i), str(out), "-"],
+        capture_output=True, text=True).stdout for i in (1, 2, 3)]
+    assert "Pagina 2" in texts[0] and "Ola" in texts[1] and "Ola" in texts[2]
+    rot = _rotations(out)
+    if rot is not None:
+        assert rot == [0, 90, 0]
+
+
+@need("qpdf")
+def test_split_one_range_is_a_single_file(pdf, d):
+    from mexerica.engine import edits as E
+    out = _one(run(E.pdf_split_op(BY_ID["pdf-cut"], [[2]]), [pdf]))
+    assert out.is_file() and out.name == "doc 2.pdf"
+    assert E.page_count(out) == 1
+    single = _one(run(E.pdf_split_op(BY_ID["pdf-cut"], E.every(1, 2)),
+                      [pdf]))
+    assert sorted(p.name for p in single.iterdir()) == ["doc 1.pdf",
+                                                        "doc 2.pdf"]
+
+
+@need("qpdf")
+def test_unlock(pdf, d):
+    from mexerica.engine import edits as E
+    locked = d / "senha.pdf"
+    sh(*T.cmd("qpdf"), "--encrypt", "abc", "dono", "256", "--", str(pdf),
+       str(locked))
+    restricted = d / "restrito.pdf"
+    sh(*T.cmd("qpdf"), "--encrypt", "", "dono", "256", "--print=none", "--",
+       str(pdf), str(restricted))
+    assert E.pdf_lock_state(pdf) == "open"
+    assert E.pdf_lock_state(locked) == "password"
+    assert E.pdf_lock_state(restricted) == "restricted"
+    res = run(E.pdf_unlock_op(BY_ID["pdf-unlock"], "errada"), [locked])
+    assert not res.outputs and "Senha errada" in str(res.errors)
+    out = _one(run(E.pdf_unlock_op(BY_ID["pdf-unlock"], "abc"), [locked]))
+    assert out.name == "senha Unlocked.pdf"
+    assert E.pdf_lock_state(out) == "open" and E.page_count(out) == 2
+    free = _one(run(E.pdf_unlock_op(BY_ID["pdf-unlock"]), [restricted]))
+    assert E.pdf_lock_state(free) == "open"
 
 
 @need("qpdf")
@@ -541,7 +632,7 @@ def test_qr_make(d):
     url = d / "Site.url"
     url.write_text("[InternetShortcut]\nURL=https://exemplo.com/q?a=1&b=2\n",
                    encoding="utf-8")
-    assert "qr-make" in [o.id for o in options_for([url], TOOLS)]
+    assert "qr-make" in [o.id for o in options_for([url], ACTIONS)]
     link = E.links_in(url)[0]
     png = _one(run(E.qr_op(BY_ID["qr-make"], link), [url]))
     assert png.name == "Site QR.png"
@@ -558,3 +649,57 @@ def test_qr_make(d):
     assert out == d / "saida" / "github.com QR.png"
     with pytest.raises(ValueError):
         E.qr_op(BY_ID["qr-make"], "  ")
+
+
+@need("qrencode")
+def test_qr_any_file_names_and_folder(d, png):
+    """Qualquer item arrastado só escolhe a pasta; o nome é o digitado."""
+    from mexerica.engine import edits as E
+    assert "qr-make" in [o.id for o in options_for([png], ACTIONS)]
+    assert "img-qr" in [o.id for o in options_for([png], ACTIONS)]
+    assert not {"qr-make", "img-qr"} & {o.id for o in
+                                       options_for([png], TOOLS)}
+    assert E.qr_name("https://www.github.com/x") == "github.com QR"
+    assert E.qr_name("só um texto") == "QR code"
+    op = E.qr_op(BY_ID["qr-make"], "https://exemplo.com", suffix="")
+    out = _one(run(op, [E.qr_target("Meu site", png, d / "nao")]))
+    assert out == d / "Meu site.png"
+    sub = d / "pasta"
+    sub.mkdir()
+    out = _one(run(op, [E.qr_target('a/b:c', sub, d / "nao")]))
+    assert out == sub / "a_b_c.png"              # pasta arrastada: dentro
+    again = _one(run(op, [E.qr_target("Meu site", png, d)]))
+    assert again.name == "Meu site (2).png"      # nunca sobrescreve
+
+
+@need("qrencode", "zbarimg")
+def test_qr_style(d):
+    """Personalizar: cor, fundo transparente, tamanho, margem, correção e
+    SVG; o QR colorido continua legível."""
+    from mexerica.engine import edits as E
+    link = "https://github.com/rogersocruz/mexerica"
+    blue = E.QrStyle(fg="#1E3A8A", bg="#FFF7E6", size=500, margin=2,
+                     level="H")
+    args = E.qr_args(blue, 29)
+    assert "--foreground=1E3A8A" in args and "--background=FFF7E6" in args
+    assert args[args.index("-l") + 1] == "H"
+    assert args[args.index("-m") + 1] == "2"
+    assert args[args.index("-s") + 1] == str(round(500 / 33))
+    op = E.qr_op(BY_ID["qr-make"], link, suffix="", style=blue)
+    png = _one(run(op, [E.qr_target("azul", d / "x.txt", d)]))
+    side = int.from_bytes(png.read_bytes()[16:20], "big")
+    assert 400 <= side <= 600                    # perto do tamanho pedido
+    assert run(BY_ID["img-qr"], [png]).texts == [link]
+    clear = E.QrStyle(transparent=True, fmt="svg")
+    assert "--background=FFFFFF00" in E.qr_args(clear, 21)
+    svg = _one(run(E.qr_op(BY_ID["qr-make"], link, suffix="", style=clear),
+                   [E.qr_target("claro", d / "x.txt", d)]))
+    assert svg.suffix == ".svg"
+    assert E.QrStyle(fg="#FFFF00").low_contrast()
+    assert not E.QrStyle().low_contrast()
+    with pytest.raises(ValueError):
+        E.qr_args(E.QrStyle(fg="azul"), 21)
+    # a escolha fica nas configurações
+    from mexerica import settings
+    settings.update(**blue.to_settings())
+    assert E.QrStyle.from_settings(settings.get()) == blue

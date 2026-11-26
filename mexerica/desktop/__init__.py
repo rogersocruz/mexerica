@@ -10,11 +10,13 @@ notificações):
   Windows  o próprio serviço observa mouse e teclado e cuida das janelas
            pela API Win32 (windows.py, win32.py); a regra de quando abrir
            e fechar a roda é a mesma da extensão (drag.py)
+  COSMIC   e outros Linux sem a extensão: a roda abre por um atalho de
+           teclado (mexerica wheel) numa camada overlay (cosmic.py)
 
 Todo backend tem: start, stop, show_overlay, wheel_center, overlay_dim,
 dialog_parent, drag_source, file_icon, display_name, autostart,
 set_autostart, set_clipboard, reveal, open_uri, open_terminal, notify,
-withdraw e status.
+withdraw, drag_ok, anchor_at e set_right_click.
 """
 from __future__ import annotations
 
@@ -61,5 +63,8 @@ def backend(app):
     if WINDOWS:
         from .windows import WindowsDesktop
         return WindowsDesktop(app)
+    from .cosmic import WaylandDesktop, is_gnome
+    if not is_gnome() and os.environ.get("XDG_CURRENT_DESKTOP"):
+        return WaylandDesktop(app)          # COSMIC, KDE, Sway...
     from .gnome import GnomeDesktop
     return GnomeDesktop(app)

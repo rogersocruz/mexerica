@@ -88,3 +88,57 @@ def test_every_style_applies(style):
     finally:
         TH.apply()
     assert TH.ENTER_MS == TH.MOTION["ENTER_MS"]
+
+
+def test_numbers_saved_as_float_still_count(isolated_settings):
+    isolated_settings.write_text(json.dumps(
+        {"dim": 40.0, "window_opacity": 80.5, "animations": 1}),
+        encoding="utf-8")
+    data = settings.load()
+    assert data["dim"] == 40 and type(data["dim"]) is int
+    assert data["window_opacity"] == settings.DEFAULTS["window_opacity"]
+    assert data["animations"] is True                  # 1 não vira bool
+
+
+def test_stage_is_live_and_flush_persists(isolated_settings):
+    settings.stage(dim=50)
+    assert settings.get()["dim"] == 50 and not isolated_settings.exists()
+    assert settings.flush()
+    assert json.loads(isolated_settings.read_text("utf-8"))["dim"] == 50
+
+
+def test_busy_file_keeps_the_change(isolated_settings, monkeypatch):
+    """Windows: o replace falha com o arquivo ocupado. A mudança continua
+    valendo e a próxima gravação leva tudo."""
+    import os
+    real = os.replace
+    calls = []
+
+    def busy(a, b):
+        calls.append(1)
+        raise PermissionError("ocupado")
+    monkeypatch.setattr(settings.os, "replace", busy)
+    monkeypatch.setattr(settings.time, "sleep", lambda s: None)
+    settings.update(style="uva")
+    assert settings.get()["style"] == "uva" and len(calls) == 5
+    monkeypatch.setattr(settings.os, "replace", real)
+    settings.update(dim=10)
+    saved = json.loads(isolated_settings.read_text("utf-8"))
+    assert saved["style"] == "uva" and saved["dim"] == 10
+
+
+@pytest.mark.parametrize("ext,args", [
+    ("jpg", ["-quality", "92"]), ("webp", ["-quality", "85"]),
+    ("avif", ["-quality", "60"]), ("heic", ["-quality", "70"]),
+    ("jxl", ["-quality", "85"]),
+    ("png", ["-define", "png:compression-level=7"]), ("gif", [])])
+def test_quality_per_format(ext, args):
+    from mexerica.engine.ops import quality_args
+    assert quality_args(ext) == args
+
+
+def test_quality_follows_settings():
+    from mexerica.engine.ops import quality_args
+    settings.update(avif_quality=33, webp_lossless=True)
+    assert quality_args("avif") == ["-quality", "33"]
+    assert "webp:lossless=true" in quality_args("webp")

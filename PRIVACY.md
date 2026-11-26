@@ -1,6 +1,6 @@
 # Política de privacidade da Mexerica
 
-*Última atualização: 3 de novembro de 2026*
+*Última atualização: 26 de novembro de 2026*
 
 A Mexerica é um conversor de arquivos que roda inteiramente no seu
 computador.
@@ -27,6 +27,24 @@ telemetria. Ela não tem conta, anúncios nem análise de uso.
   atalhos Alt+Shift e Ctrl+Shift de troca de teclado e guarda os valores
   originais em `%LOCALAPPDATA%\Mexerica\layout-hotkeys.json`, para poder
   devolvê-los.
+
+- **Desfoque próprio (opcional):** com *Configurações > Aparência >
+  Desfoque de fundo > Próprio*, a Mexerica tira uma imagem do monitor no
+  instante em que a roda abre, para desfocar o fundo atrás dela. A imagem
+  fica só na memória, não é gravada em disco e é descartada quando a roda
+  fecha.
+- **Seleção do Explorer:** para juntar PDFs na ordem da lista e para as
+  ações do botão direito, a Mexerica lê quais arquivos estão selecionados
+  ou visíveis na janela do Explorer de onde você arrastou. Isso acontece
+  só no momento da ação e não sai do computador.
+
+## Rede
+
+A Mexerica só usa a internet quando **você pede** para baixar um formato
+extra (*Configurações > Sobre > Formatos extras*): o programa daquele
+formato é baixado dos repositórios oficiais (MSYS2 ou winget no Windows; o
+gerenciador de pacotes do sistema no Linux). Nada é enviado além do pedido
+de download. Na versão da Microsoft Store, essa opção não baixa nada.
 
 ## Programas de terceiros
 

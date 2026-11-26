@@ -160,7 +160,7 @@ public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr w, IntPtr l)
     }
     $deadline = (Get-Date).AddSeconds(3)
     do {
-        $left = @(Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe' OR Name = 'python.exe'" |
+        $left = @(Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe' OR Name = 'python.exe' OR Name = 'mexerica-app.exe'" |
             Where-Object { $_.CommandLine -match '-m mexerica( daemon)?\s*$' })
         if (-not $left) { return }
         Start-Sleep -Milliseconds 300
@@ -203,6 +203,9 @@ if (-not $Msys) {
 $Ucrt = Join-Path $Msys 'ucrt64\bin'
 $Py = Join-Path $Ucrt 'python.exe'
 $PyW = Join-Path $Ucrt 'pythonw.exe'
+# cópia do pythonw.exe com o nome e o ícone da Mexerica (é o que o
+# Gerenciador de Tarefas mostra); fica ao lado dele, para achar as DLLs
+$MexExe = Join-Path $Ucrt 'mexerica-app.exe'
 Write-Host "MSYS2: $Msys"
 
 # (com -AppOnly: só copia o app e reinicia o serviço)
@@ -259,6 +262,19 @@ Get-ChildItem $dest -Recurse -Directory -Filter '__pycache__' | Remove-Item -Rec
 Copy-Item "data\icons\$AppId.ico" $Ico -Force
 Copy-Item 'bin\mexerica-open.pyw' $App -Force
 
+# o executável "Mexerica" (refeito a cada instalação: acompanha o Python do
+# MSYS2 depois de um pacman -Syu)
+Push-Location $App
+try {
+    & $Py -X utf8 -m mexerica.desktop.branding $PyW $MexExe $Ico
+    if ($LASTEXITCODE -ne 0) { throw 'falhou' }
+} catch {
+    Write-Warning "Não deu para criar o mexerica-app.exe; o serviço roda no pythonw.exe."
+    $MexExe = $PyW
+} finally {
+    Pop-Location
+}
+
 $launcher = Get-Content -Raw 'bin\mexerica.cmd.in'
 $launcher = $launcher.Replace('@PYTHON@', (ConvertTo-CmdPath $Py)).Replace('@PKGDATADIR@', '%~dp0..\app')
 [IO.File]::WriteAllText((Join-Path $Bin 'mexerica.cmd'), $launcher,
@@ -276,7 +292,7 @@ if (($userPath -split ';') -notcontains $Bin) {
 $shell = New-Object -ComObject WScript.Shell
 function New-Shortcut([string]$Path, [string]$Arguments, [string]$Description) {
     $lnk = $shell.CreateShortcut($Path)
-    $lnk.TargetPath = $PyW
+    $lnk.TargetPath = $MexExe
     $lnk.Arguments = $Arguments
     $lnk.WorkingDirectory = $App        # o `python -m` acha o pacote aqui
     $lnk.Description = $Description
@@ -300,7 +316,7 @@ function Set-ContextMenu([string]$Class) {
     $key.SetValue('MUIVerb', 'Converter com a Mexerica')
     $key.SetValue('Icon', $Ico)
     $command = $key.CreateSubKey('command')
-    $command.SetValue('', "`"$PyW`" -X utf8 `"$(Join-Path $App 'mexerica-open.pyw')`" `"%1`"")
+    $command.SetValue('', "`"$MexExe`" -X utf8 `"$(Join-Path $App 'mexerica-open.pyw')`" `"%1`"")
     $command.Close()
     $key.Close()
 }
@@ -319,7 +335,7 @@ if (-not $KeepLayoutHotkeys) {
 }
 
 # --- serviço --------------------------------------------------------------------
-Start-Process -FilePath $PyW -ArgumentList '-X', 'utf8', '-m', 'mexerica', 'daemon' -WorkingDirectory $App
+Start-Process -FilePath $MexExe -ArgumentList '-X', 'utf8', '-m', 'mexerica', 'daemon' -WorkingDirectory $App
 
 Write-Host ''
 $env:PYTHONPATH = $App

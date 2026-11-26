@@ -28,8 +28,8 @@ dele. Os rótulos das ferramentas e ações ficam em inglês e caixa-alta, com u
 - Só os itens que servem para **todos** os arquivos arrastados. Uma imagem e
   um vídeo juntos, por exemplo, só mostram o que serve para os dois (como
   STRIP META).
-- Só os itens cujo programa está instalado (veja `mexerica doctor` ou
-  **Configurações > Sobre**).
+- Só os itens cujo programa está instalado (instale em **Configurações >
+  Sobre > Formatos extras**; confira com `mexerica doctor`).
 - Só os itens ligados em **Configurações > Itens da roda**.
 - Com vários arquivos aparecem as operações de lote (juntar PDFs, colagem,
   juntar vídeos…).
@@ -61,7 +61,24 @@ antes de executar; eles ficam no topo da roda de ferramentas. Veja
 [Janelas de edição](Janelas-de-edicao.md). FLOAT abre a
 [bolha flutuante](Flutuar.md).
 
-## Sem arrastar
+## Por clique
+
+A roda também abre sem arraste, no ponteiro, e aí **o clique escolhe** (ou
+setas e Enter; Esc ou clicar fora fecha). Ela espera até 30 s pela escolha.
+Para **trocar de roda**, aperte **Tab** (próxima: conversão, ferramentas,
+ações) ou **Shift+Tab** (anterior); a rodinha do mouse faz o mesmo.
+
+- **Windows, Ctrl + botão direito:** com a opção ligada em
+  [Configurações > Comportamento](Configuracoes.md#comportamento), Ctrl +
+  botão direito sobre arquivos selecionados no Explorer ou na área de
+  trabalho abre a roda de ações no lugar do menu. Com ela ligada, o
+  Shift + arrastar deixa de abrir a roda: os dois não convivem.
+- **Linha de comando:** `mexerica wheel [--group convert|tools|actions]
+  ARQUIVOS…`. Sem arquivos, a roda abre vazia e espera um arquivo ser
+  arrastado até ela (o jeito de usar no COSMIC: veja
+  [Instalação no Linux](Instalacao-Linux.md#cosmic-e-outros-desktops)).
+
+## Sem arrastar, por D-Bus
 
 A roda também abre por D-Bus (útil para testar), e aí o clique escolhe:
 

@@ -131,7 +131,7 @@ Formatos de saída. A conversão pura só troca a extensão do nome.
 
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
-| **EXTRACT** | Extrair | gera uma pasta | `extract` | `bsdtar` |
+| **EXTRAIR** | Extrair | gera uma pasta | `extract` | `bsdtar` |
 | **ZIP** | Converte para ZIP | — | `pack-zip` | `bsdtar` |
 | **7Z** | Converte para 7Z | — | `pack-7z` | `bsdtar` |
 | **TAR.GZ** | Converte para TAR.GZ | — | `pack-tar.gz` | `bsdtar` |
@@ -169,78 +169,71 @@ Processam mantendo o tipo. As que têm … abrem uma janela (veja [Janelas de ed
 
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
-| **EDIT** | Editar — Recortar, girar, cor, tamanho | abre janela | `img-edit` | `magick` |
-| **CROP** | Recortar — Recorte com proporção | abre janela | `img-crop` | `magick` |
-| **ADD BG** | Fundo — Fundo, cantos e sombra | abre janela | `img-addbg` | `magick` |
-| **REMOVE BG** | Remover fundo — Fundo transparente (PNG) | sufixo “Without Background” | `img-rmbg` | `magick` |
-| **RESIZE** | Tamanho — Dimensões, qualidade e peso | abre janela | `img-size` | `magick` |
-| **COMPRESS** | Comprimir — Qualidade 75, sem metadados | sufixo “Compressed” | `img-compress` | `magick` |
+| **EDITAR** | Editar — Recortar, girar, cor, tamanho | abre janela | `img-edit` | `magick` |
+| **RECORTAR** | Recortar — Recorte com proporção | abre janela | `img-crop` | `magick` |
+| **FUNDO** | Fundo — Fundo, cantos e sombra | abre janela | `img-addbg` | `magick` |
+| **TIRAR FUNDO** | Remover fundo — Fundo transparente (PNG) | sufixo “Without Background” | `img-rmbg` | `magick` |
+| **TAMANHO** | Tamanho — Dimensões, qualidade e peso | abre janela | `img-size` | `magick` |
+| **COMPRIMIR** | Comprimir — Qualidade 75, sem metadados | sufixo “Compressed” | `img-compress` | `magick` |
 | **≤ 1 MB** | ≤ 1 MB — JPG de até 1 MB | sufixo “1MB”; fora da roda por padrão | `img-1mb` | `magick` |
 | **50%** | 50% — Reduz pela metade | sufixo “Half”; fora da roda por padrão | `img-half` | `magick` |
-| **ROTATE** | Girar 90° | sufixo “Rotated” | `img-rotate` | `magick` |
+| **GIRAR** | Girar 90° | sufixo “Rotated” | `img-rotate` | `magick` |
 | **ESPELHAR** | Espelhar | sufixo “Flipped”; fora da roda por padrão | `img-flip` | `magick` |
 | **P&B** | P&B | sufixo “Grayscale”; fora da roda por padrão | `img-gray` | `magick` |
-| **READ QR** | Ler QR — Copia o conteúdo | mostra/copia texto | `img-qr` | `zbarimg` |
-| **TO PDF** | Juntar PDF — Todas as imagens num PDF | vários arquivos → um resultado; sufixo “Merged” | `img-pdf` | `magick` |
-| **COLLAGE** | Colagem | vários arquivos → um resultado (mín. 2); sufixo “Collage” | `img-collage` | `montage` |
+| **PARA PDF** | Juntar PDF — Todas as imagens num PDF | vários arquivos → um resultado; sufixo “Merged” | `img-pdf` | `magick` |
+| **COLAGEM** | Colagem | vários arquivos → um resultado (mín. 2); sufixo “Collage” | `img-collage` | `montage` |
 
 ### Vídeo
 
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
-| **TRIM** | Cortar — Escolher o trecho | abre janela | `vid-trim` | `ffmpeg`, `ffprobe` |
-| **RESIZE** | Tamanho — Caber em X MB, resolução | abre janela | `vid-size` | `ffmpeg`, `ffprobe` |
-| **COMPRESS** | Comprimir — H.264 CRF 28 | sufixo “Compressed” | `vid-compress` | `ffmpeg` |
+| **CORTAR** | Cortar — Escolher o trecho | abre janela | `vid-trim` | `ffmpeg`, `ffprobe` |
+| **TAMANHO** | Tamanho — Caber em X MB, resolução | abre janela | `vid-size` | `ffmpeg`, `ffprobe` |
+| **COMPRIMIR** | Comprimir — H.264 CRF 28 | sufixo “Compressed” | `vid-compress` | `ffmpeg` |
 | **≤ 25 MB** | ≤ 25 MB | sufixo “25MB”; fora da roda por padrão | `vid-25mb` | `ffmpeg`, `ffprobe` |
 | **≤ 10 MB** | ≤ 10 MB | sufixo “10MB”; fora da roda por padrão | `vid-10mb` | `ffmpeg`, `ffprobe` |
-| **MUTE** | Sem áudio | sufixo “Muted” | `vid-mute` | `ffmpeg` |
-| **2× SPEED** | 2× vel. | sufixo “2x Speed” | `vid-2x` | `ffmpeg` |
-| **ROTATE** | Girar 90° | sufixo “Rotated” | `vid-rotate` | `ffmpeg` |
+| **SEM SOM** | Sem áudio | sufixo “Muted” | `vid-mute` | `ffmpeg` |
+| **2× VELOC.** | 2× vel. | sufixo “2x Speed” | `vid-2x` | `ffmpeg` |
+| **GIRAR** | Girar 90° | sufixo “Rotated” | `vid-rotate` | `ffmpeg` |
 | **720P** | 720p — No máximo 720 linhas, H.264 | sufixo “720p”; fora da roda por padrão | `vid-720p` | `ffmpeg` |
-| **SNAPSHOT** | Snapshot — Quadro do meio do vídeo | sufixo “Snapshot” | `vid-snap` | `ffmpeg`, `ffprobe` |
-| **JOIN** | Juntar — Mesma resolução recomendada | vários arquivos → um resultado (mín. 2); sufixo “Merged” | `vid-join` | `ffmpeg` |
+| **FOTO** | Snapshot — Quadro do meio do vídeo | sufixo “Snapshot” | `vid-snap` | `ffmpeg`, `ffprobe` |
+| **JUNTAR** | Juntar — Mesma resolução recomendada | vários arquivos → um resultado (mín. 2); sufixo “Merged” | `vid-join` | `ffmpeg` |
 
 ### Áudio
 
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
-| **TRIM** | Cortar — Escolher o trecho | abre janela | `aud-trim` | `ffmpeg`, `ffprobe` |
-| **NORMALIZE** | Normalizar — EBU R128, -16 LUFS | sufixo “Normalized” | `aud-normalize` | `ffmpeg` |
-| **COMPRESS** | Comprimir — MP3 128 kbps | sufixo “Compressed” | `aud-compress` | `ffmpeg` |
+| **CORTAR** | Cortar — Escolher o trecho | abre janela | `aud-trim` | `ffmpeg`, `ffprobe` |
+| **NORMALIZAR** | Normalizar — EBU R128, -16 LUFS | sufixo “Normalized” | `aud-normalize` | `ffmpeg` |
+| **COMPRIMIR** | Comprimir — MP3 128 kbps | sufixo “Compressed” | `aud-compress` | `ffmpeg` |
 | **MONO** | Mono | sufixo “Mono” | `aud-mono` | `ffmpeg` |
-| **SILENCE** | Tirar silêncio | sufixo “Without Silence” | `aud-silence` | `ffmpeg` |
-| **JOIN** | Juntar | vários arquivos → um resultado (mín. 2); sufixo “Merged” | `aud-join` | `ffmpeg` |
+| **SILÊNCIO** | Tirar silêncio | sufixo “Without Silence” | `aud-silence` | `ffmpeg` |
+| **JUNTAR** | Juntar | vários arquivos → um resultado (mín. 2); sufixo “Merged” | `aud-join` | `ffmpeg` |
 
 ### PDF
 
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
-| **PAGES** | Páginas — Extrair, apagar ou girar páginas | abre janela | `pdf-pages` | `qpdf`, `pdftoppm` |
-| **MERGE…** | Juntar — Escolher a ordem antes de juntar | abre janela | `pdf-order` | `qpdf`, `pdftoppm` |
-| **SPLIT** | Dividir — Por intervalos ou a cada N páginas | abre janela | `pdf-cut` | `qpdf`, `pdftoppm` |
-| **COMPRESS** | Comprimir — Ghostscript /ebook | sufixo “Compressed” | `pdf-compress` | `gs` |
-| **EVERY PAGE** | Dividir — Um PDF por página | gera uma pasta; sufixo “Pages”; fora da roda por padrão | `pdf-split` | `qpdf` |
-| **ROTATE** | Girar 90° | sufixo “Rotated” | `pdf-rotate` | `qpdf` |
-| **IMAGES** | Extrair imagens | gera uma pasta; sufixo “Images” | `pdf-images` | `pdfimages` |
-| **MERGE** | Juntar — Na ordem da seleção | vários arquivos → um resultado (mín. 2); sufixo “Merged” | `pdf-merge` | `qpdf` |
-
-### Texto e Markdown
-
-| Na roda | O que faz | Detalhes | id | Precisa de |
-|---|---|---|---|---|
-| **MAKE QR** | Gerar QR — QR code de um link do arquivo ou colado | abre janela | `qr-make` | `qrencode` |
+| **PÁGINAS** | Páginas — Reordenar, girar, apagar ou extrair páginas | abre janela | `pdf-pages` | `qpdf`, `pdftoppm` |
+| **JUNTAR** | Juntar — Ordenar, girar e apagar páginas antes de juntar | abre janela | `pdf-order` | `qpdf`, `pdftoppm` |
+| **DIVIDIR** | Dividir — Página a página, um intervalo ou vários | abre janela | `pdf-cut` | `qpdf`, `pdftoppm` |
+| **DESBLOQUEAR** | Desbloquear — Tira a senha e as restrições | abre janela | `pdf-unlock` | `qpdf` |
+| **COMPRIMIR** | Comprimir — Ghostscript /ebook | sufixo “Compressed” | `pdf-compress` | `gs` |
+| **CADA PÁGINA** | Dividir — Um PDF por página | gera uma pasta; sufixo “Pages”; fora da roda por padrão | `pdf-split` | `qpdf` |
+| **GIRAR** | Girar 90° | sufixo “Rotated” | `pdf-rotate` | `qpdf` |
+| **IMAGENS** | Extrair imagens | gera uma pasta; sufixo “Images” | `pdf-images` | `pdfimages` |
 
 ### Vários tipos
 
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
-| **STRIP META** | Sem metadados — Remove EXIF/GPS/autor | sufixo “Without Metadata” | `strip-meta` | `exiftool` |
+| **SEM METADADOS** | Sem metadados — Remove EXIF/GPS/autor | sufixo “Without Metadata” | `strip-meta` | `exiftool` |
 
 ### Qualquer arquivo
 
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
-| **METADATA** | Metadados — Ler metadados | mostra/copia texto | `show-meta` | `exiftool` |
+| **METADADOS** | Metadados — Ler metadados | mostra/copia texto | `show-meta` | `exiftool` |
 
 ## Ações (Shift + Ctrl)
 
@@ -250,9 +243,16 @@ Ações de arquivo, sem conversão.
 
 | Na roda | O que faz | Detalhes | id | Precisa de |
 |---|---|---|---|---|
-| **COPY PATH** | Copiar caminho | — | `act-copy-path` | — |
+| **COPIAR CAMINHO** | Copiar caminho | — | `act-copy-path` | — |
 | **TERMINAL** | Terminal — Abre um terminal na pasta | — | `act-terminal` | — |
-| **COPY TO** | Copiar para | — | `act-copy-to` | — |
-| **MOVE TO** | Mover para | — | `act-move-to` | — |
-| **FLOAT** | Flutuar — Janela flutuante para arrastar depois | — | `act-float` | — |
+| **COPIAR PARA** | Copiar para | — | `act-copy-to` | — |
+| **MOVER PARA** | Mover para | — | `act-move-to` | — |
+| **FLUTUAR** | Flutuar — Janela flutuante para arrastar depois | — | `act-float` | — |
+| **GERAR QR** | Gerar QR — QR code de um link, salvo na pasta do arquivo | abre janela | `qr-make` | `qrencode` |
 | **ZIP** | ZIP — Tudo num ZIP | vários arquivos → um resultado | `act-zip-all` | `bsdtar` |
+
+### Imagens
+
+| Na roda | O que faz | Detalhes | id | Precisa de |
+|---|---|---|---|---|
+| **LER QR** | Ler QR — Copia o conteúdo | mostra/copia texto | `img-qr` | `zbarimg` |

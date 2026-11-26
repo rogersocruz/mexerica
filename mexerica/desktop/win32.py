@@ -20,6 +20,13 @@ ole32 = ctypes.WinDLL("ole32")
 dwmapi = ctypes.WinDLL("dwmapi")
 
 
+def win_path(path) -> str:
+    """O caminho com barras invertidas. O Python do MSYS2 escreve
+    "C:/Users/..." e as APIs do shell (ILCreateFromPath,
+    SHCreateItemFromParsingName, explorer /select) recusam esse formato."""
+    return os.fspath(path).replace("/", "\\")
+
+
 def _fn(dll, name, restype, *argtypes):
     f = getattr(dll, name, None)
     if f is not None:
@@ -284,6 +291,14 @@ def primary_button_down() -> bool:
     return _down(VK_RBUTTON if GetSystemMetrics(SM_SWAPBUTTON) else VK_LBUTTON)
 
 
+VK_TAB = 0x09
+
+
+def key_down(vk: int) -> bool:
+    """A tecla está apertada agora (teclado físico, qualquer foco)?"""
+    return _down(vk)
+
+
 def modifiers() -> tuple[bool, bool, bool]:
     """(Shift, Alt, Ctrl), lidos do teclado físico, com o foco em qualquer app."""
     return _down(VK_SHIFT), _down(VK_MENU), _down(VK_CONTROL)
@@ -465,14 +480,78 @@ def _accent(hwnd: int, state: int) -> None:
     SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
 
 
-def set_glass(hwnd: int, rounded: bool) -> bool:
+CreateCompatibleDC = _fn(gdi32, "CreateCompatibleDC", W.HDC, W.HDC)
+CreateDIBSection = _fn(gdi32, "CreateDIBSection", W.HBITMAP, W.HDC,
+                       ctypes.c_void_p, W.UINT,
+                       ctypes.POINTER(ctypes.c_void_p), W.HANDLE, W.DWORD)
+SelectObject = _fn(gdi32, "SelectObject", W.HGDIOBJ, W.HDC, W.HGDIOBJ)
+BitBlt = _fn(gdi32, "BitBlt", W.BOOL, W.HDC, ctypes.c_int, ctypes.c_int,
+             ctypes.c_int, ctypes.c_int, W.HDC, ctypes.c_int, ctypes.c_int,
+             W.DWORD)
+DeleteDC = _fn(gdi32, "DeleteDC", W.BOOL, W.HDC)
+SRCCOPY = 0x00CC0020
+
+
+def capture(rect: Rect, shrink: int = 2):
+    """Foto da tela em `rect` (pixels físicos) como cairo.ImageSurface,
+    já reduzida `shrink` vezes (o borrão vem depois e não precisa do
+    tamanho cheio; em 4K isso corta 3/4 do trabalho). Fica só na memória.
+    None se falhar (sessão bloqueada, área segura do UAC)."""
+    import cairo
+    left, top, right, bottom = rect
+    w, h = right - left, bottom - top
+    if w <= 0 or h <= 0:
+        return None
+    screen = GetDC(None)
+    mem = CreateCompatibleDC(screen)
+    bits = ctypes.c_void_p()
+    info = BITMAPINFOHEADER(biSize=ctypes.sizeof(BITMAPINFOHEADER),
+                            biWidth=w, biHeight=-h,   # negativo: de cima
+                            biPlanes=1, biBitCount=32, biCompression=0)
+    bmp = CreateDIBSection(screen, ctypes.byref(info), 0, ctypes.byref(bits),
+                           None, 0)
+    try:
+        if not bmp or not bits.value:
+            return None
+        old = SelectObject(mem, bmp)
+        # sem CAPTUREBLT: não é mais rápido e pegaria a miniatura do
+        # arraste (que fica por cima da roda de qualquer jeito)
+        ok = BitBlt(mem, 0, 0, w, h, screen, left, top, SRCCOPY)
+        SelectObject(mem, old)
+        if not ok:
+            return None
+        # BGRA de 32 bits é exatamente o FORMAT_RGB24 do cairo (little
+        # endian); a cópia solta a memória do GDI
+        stride = cairo.ImageSurface.format_stride_for_width(
+            cairo.FORMAT_RGB24, w)
+        data = bytearray(ctypes.string_at(bits.value, stride * h))
+        full = cairo.ImageSurface.create_for_data(data, cairo.FORMAT_RGB24,
+                                                  w, h, stride)
+        if shrink <= 1:
+            return full
+        small = cairo.ImageSurface(cairo.FORMAT_RGB24, max(1, w // shrink),
+                                   max(1, h // shrink))
+        cr = cairo.Context(small)
+        cr.scale(1 / shrink, 1 / shrink)
+        cr.set_source_surface(full, 0, 0)
+        cr.get_source().set_filter(cairo.FILTER_GOOD)
+        cr.paint()
+        return small
+    finally:
+        if bmp:
+            DeleteObject(bmp)
+        DeleteDC(mem)
+        ReleaseDC(None, screen)
+
+
+def set_glass(hwnd: int, rounded: bool, blur: bool = True) -> bool:
     """Vidro: o DWM borra o que está atrás da janela (no GNOME é a extensão
     que faz isso). A janela GTK já é translúcida, então o borrão aparece
     através dela. Com cantos, o DWM arredonda a janela (8 px, Windows 11)
     e corta o borrão junto. Devolve se o borrão ficou ligado: sem
     transparência no Windows ele é desligado (ficaria preto), e quem chama
     deixa a janela sólida."""
-    glass = transparency_on()
+    glass = blur and transparency_on()
     # desliga também: a janela pode ter ganhado o borrão numa abertura
     # anterior, com a transparência ainda ligada
     _accent(hwnd, ACCENT_ENABLE_BLURBEHIND if glass else ACCENT_DISABLED)
@@ -555,10 +634,10 @@ _DESKTOP = (ctypes.c_ubyte * 2)()      # IDLIST vazia: a raiz do shell
 def file_data_object(paths: list[Path]) -> int:
     """IDataObject do shell para os arquivos, o mesmo que o Explorer arrasta
     (CF_HDROP, lista de itens e miniatura). Quem chama faz o com_release."""
-    pidls = [ILCreateFromPathW(str(p)) for p in paths]
-    parents = {str(Path(p).parent).lower() for p in paths}
+    pidls = [ILCreateFromPathW(win_path(p)) for p in paths]
+    parents = {win_path(Path(p).parent).lower() for p in paths}
     # mesma pasta: pasta + itens dela; pastas diferentes: tudo a partir da raiz
-    folder = ILCreateFromPathW(str(Path(paths[0]).parent)) \
+    folder = ILCreateFromPathW(win_path(Path(paths[0]).parent)) \
         if len(parents) == 1 else None
     try:
         if not all(pidls) or (len(parents) == 1 and not folder):
@@ -601,7 +680,7 @@ def shell_image(path: Path, size: int) -> tuple[int, int, bytes] | None:
     altura e pixels BGRA pré-multiplicados, de cima para baixo."""
     CoInitializeEx(None, COINIT_APARTMENTTHREADED)
     factory = ctypes.c_void_p()
-    if SHCreateItemFromParsingName(str(path), None,
+    if SHCreateItemFromParsingName(win_path(path), None,
                                    ctypes.byref(IID_IShellItemImageFactory),
                                    ctypes.byref(factory)) < 0:
         return None
@@ -666,7 +745,8 @@ def display_name(path: Path) -> str:
     """O nome como o Explorer mostra (atalho sem .lnk, extensão escondida
     se o Explorer esconde)."""
     info = SHFILEINFOW()
-    if SHGetFileInfoW(str(path), 0, ctypes.byref(info), ctypes.sizeof(info),
+    if SHGetFileInfoW(win_path(path), 0, ctypes.byref(info),
+                      ctypes.sizeof(info),
                       SHGFI_DISPLAYNAME) and info.szDisplayName:
         return info.szDisplayName
     return Path(path).name
@@ -682,12 +762,16 @@ SMTO_ABORTIFHUNG = 0x0002
 COPY_FILES = 0x4D58         # "MX": identifica a lista de arquivos
 
 
-def send_files(hwnd, paths: list[str]) -> bool:
+COPY_WHEEL = 0x4D57         # "MW": modo + arquivos para a roda no ponteiro
+
+
+def send_files(hwnd, paths: list[str], kind: int = COPY_FILES) -> bool:
     """Manda caminhos para a janela da bandeja de outro processo (o
-    "Converter com a Mexerica" sem o D-Bus do GLib)."""
+    "Converter com a Mexerica" sem o D-Bus do GLib). Com COPY_WHEEL, a
+    primeira linha é o modo da roda (mexerica wheel)."""
     raw = "\n".join(paths).encode("utf-16-le")
     buf = ctypes.create_string_buffer(raw, len(raw))
-    data = COPYDATASTRUCT(COPY_FILES, len(raw),
+    data = COPYDATASTRUCT(kind, len(raw),
                           ctypes.cast(buf, ctypes.c_void_p))
     result = ctypes.c_size_t()
     return bool(SendMessageTimeoutW(hwnd, WM_COPYDATA, 0,
@@ -714,9 +798,10 @@ class Tray:
     _proc = None
 
     def __init__(self, icon: Path, tip: str, on_open, menu, on_close,
-                 on_files=None):
+                 on_files=None, on_wheel=None):
         self._on_open, self._menu, self._on_close = on_open, menu, on_close
         self._on_files = on_files
+        self._on_wheel = on_wheel
         self._recreated = RegisterWindowMessageW("TaskbarCreated")
         instance = GetModuleHandleW(None)
         if Tray._proc is None:
@@ -763,14 +848,18 @@ class Tray:
             if msg == self.OPEN:
                 self._on_open()
                 return 0
-            if msg == WM_COPYDATA and self._on_files:
+            if msg == WM_COPYDATA:
                 data = ctypes.cast(lparam,
                                    ctypes.POINTER(COPYDATASTRUCT)).contents
-                if data.dwData != COPY_FILES:
-                    return 0
                 text = ctypes.wstring_at(data.lpData, data.cbData // 2)
-                self._on_files([Path(p) for p in text.split("\n") if p])
-                return 1
+                lines = [p for p in text.split("\n") if p]
+                if data.dwData == COPY_FILES and self._on_files:
+                    self._on_files([Path(p) for p in lines])
+                    return 1
+                if data.dwData == COPY_WHEEL and self._on_wheel and lines:
+                    self._on_wheel(lines[0], [Path(p) for p in lines[1:]])
+                    return 1
+                return 0
             if msg == self._recreated:      # o Explorer reiniciou
                 self.shown = bool(Shell_NotifyIconW(NIM_ADD,
                                                     ctypes.byref(self._data)))
@@ -809,8 +898,8 @@ def reveal(paths: list[Path]) -> bool:
         groups.setdefault(p.parent, []).append(p)
     ok = True
     for folder, items in groups.items():
-        pidls = [ILCreateFromPathW(str(folder))]
-        pidls += [ILCreateFromPathW(str(p)) for p in items]
+        pidls = [ILCreateFromPathW(win_path(folder))]
+        pidls += [ILCreateFromPathW(win_path(p)) for p in items]
         try:
             if not all(pidls):
                 ok = False
@@ -822,3 +911,117 @@ def reveal(paths: list[Path]) -> bool:
                 if pidl:
                     ILFree(pidl)
     return ok
+
+
+# --------------------------------------------------------------------------
+# Ctrl + clique direito no Explorer: a roda de ações no lugar do menu
+# --------------------------------------------------------------------------
+
+WH_MOUSE_LL = 14
+WM_RBUTTONDOWN = 0x0204
+WM_QUIT = 0x0012
+LLMHF_INJECTED = 0x1
+GA_ROOT = 2
+# janelas do Explorer e da área de trabalho
+EXPLORER_CLASSES = {"CabinetWClass", "ExploreWClass", "Progman", "WorkerW"}
+
+
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [("pt", W.POINT), ("mouseData", W.DWORD), ("flags", W.DWORD),
+                ("time", W.DWORD), ("dwExtraInfo", ctypes.c_size_t)]
+
+
+HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, ctypes.c_int, W.WPARAM,
+                              W.LPARAM)
+SetWindowsHookExW = _fn(user32, "SetWindowsHookExW", W.HHOOK, ctypes.c_int,
+                        HOOKPROC, W.HINSTANCE, W.DWORD)
+UnhookWindowsHookEx = _fn(user32, "UnhookWindowsHookEx", W.BOOL, W.HHOOK)
+CallNextHookEx = _fn(user32, "CallNextHookEx", ctypes.c_ssize_t, W.HHOOK,
+                     ctypes.c_int, W.WPARAM, W.LPARAM)
+WindowFromPoint = _fn(user32, "WindowFromPoint", W.HWND, W.POINT)
+GetAncestor = _fn(user32, "GetAncestor", W.HWND, W.HWND, W.UINT)
+GetClassNameW = _fn(user32, "GetClassNameW", ctypes.c_int, W.HWND,
+                    W.LPWSTR, ctypes.c_int)
+GetMessageW = _fn(user32, "GetMessageW", W.BOOL, ctypes.POINTER(W.MSG),
+                  W.HWND, W.UINT, W.UINT)
+PostThreadMessageW = _fn(user32, "PostThreadMessageW", W.BOOL, W.DWORD,
+                         W.UINT, W.WPARAM, W.LPARAM)
+
+
+def class_name(hwnd) -> str:
+    buf = ctypes.create_unicode_buffer(256)
+    return buf.value if hwnd and GetClassNameW(hwnd, buf, 256) else ""
+
+
+def root_window(hwnd) -> int:
+    return (GetAncestor(hwnd, GA_ROOT) or hwnd) if hwnd else 0
+
+
+def explorer_root_at(x: int, y: int) -> int:
+    """A janela de topo do Explorer (ou a área de trabalho) sob o ponto, ou
+    0 se for de outro programa."""
+    root = root_window(WindowFromPoint(W.POINT(x, y)))
+    return root if class_name(root) in EXPLORER_CLASSES else 0
+
+
+class RightClickHook:
+    """Hook de mouse de baixo nível numa thread própria. Ctrl + botão
+    direito sobre o Explorer é engolido (o menu não abre) e `on_click(hwnd,
+    x, y)` é chamado na thread do hook; quem recebe passa para o laço do
+    GTK. O botão direito sem Ctrl, ou fora do Explorer, passa intacto. O
+    callback precisa ser rápido: o Windows derruba hooks lentos."""
+
+    def __init__(self, on_click):
+        import threading
+        self._on_click = on_click
+        self._swallow_up = False
+        self._hook = None
+        self._tid = 0
+        self._proc = HOOKPROC(self._callback)
+        self._ready = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True,
+                                        name="mexerica-rclick")
+        self._thread.start()
+        self._ready.wait(2)
+
+    def _run(self) -> None:
+        self._tid = kernel32.GetCurrentThreadId()
+        self._hook = SetWindowsHookExW(WH_MOUSE_LL, self._proc,
+                                       GetModuleHandleW(None), 0)
+        self._ready.set()
+        if not self._hook:
+            return
+        msg = W.MSG()
+        while GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
+            pass
+        UnhookWindowsHookEx(self._hook)
+        self._hook = None
+
+    @property
+    def active(self) -> bool:
+        return bool(self._hook)
+
+    def _callback(self, code, wparam, lparam):
+        try:
+            if code >= 0 and wparam in (WM_RBUTTONDOWN, WM_RBUTTONUP):
+                info = ctypes.cast(lparam,
+                                   ctypes.POINTER(MSLLHOOKSTRUCT)).contents
+                if not info.flags & LLMHF_INJECTED:
+                    if wparam == WM_RBUTTONUP and self._swallow_up:
+                        self._swallow_up = False
+                        return 1
+                    if wparam == WM_RBUTTONDOWN and \
+                            GetAsyncKeyState(VK_CONTROL) & 0x8000:
+                        root = explorer_root_at(info.pt.x, info.pt.y)
+                        if root:
+                            self._swallow_up = True
+                            self._on_click(root, info.pt.x, info.pt.y)
+                            return 1
+        except Exception:  # noqa: BLE001 - nunca travar o mouse
+            pass
+        return CallNextHookEx(None, code, wparam, lparam)
+
+    def stop(self) -> None:
+        if self._tid:
+            PostThreadMessageW(self._tid, WM_QUIT, 0, 0)
+            self._thread.join(1)

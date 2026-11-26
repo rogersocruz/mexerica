@@ -34,8 +34,9 @@ Explorer para a roda. O instalador recusa rodar elevado.
 | `-KeepLayoutHotkeys` | Não desliga os atalhos de troca de teclado (abaixo) |
 
 A roda só mostra as opções dos programas que encontrar, então dá para
-instalar menos e completar depois. Para conferir o que foi encontrado:
-`mexerica doctor` ou **Configurações > Sobre**.
+instalar menos e completar depois em **Configurações > Sobre > Formatos
+extras** (Baixar e Remover por tipo de arquivo). Para conferir o que foi
+encontrado: `mexerica doctor`.
 
 ## O que a instalação faz
 
@@ -44,6 +45,10 @@ instalar menos e completar depois. Para conferir o que foi encontrado:
   `%LOCALAPPDATA%\msys64`, se `C:\` não aceitar), sem administrador; se o
   download falhar, tenta o winget.
 - **App:** copia o código para `%LOCALAPPDATA%\Mexerica\app`.
+- **Executável `mexerica-app.exe`:** uma cópia do `pythonw.exe` do MSYS2,
+  na mesma pasta dele, com o nome e o ícone da Mexerica. É ele que roda o
+  serviço, então o Gerenciador de Tarefas mostra "Mexerica" e não
+  "Python". O desinstalador apaga.
 - **Comando `mexerica`:** entra no PATH do usuário (vale nos terminais
   abertos depois da instalação).
 - **Atalhos:** "Mexerica" no menu Iniciar (abre as
@@ -82,6 +87,10 @@ devolve os atalhos.
 git pull
 .\install.cmd -AppOnly
 ```
+
+Rode de novo também depois de atualizar o MSYS2 por conta própria
+(`pacman -Syu`): uma versão nova do Python precisa de um `mexerica-app.exe`
+novo.
 
 ## Desinstalar
 

@@ -16,6 +16,7 @@ from .. import theme as TH  # noqa: E402
 from ..engine import edits as E  # noqa: E402
 from ..engine import tools as T  # noqa: E402
 from ..engine.ops import Op  # noqa: E402
+from ..i18n import _  # noqa: E402
 from .base import EditorWindow, Segmented, label, spin  # noqa: E402
 from .common import bg, texture  # noqa: E402
 
@@ -26,7 +27,7 @@ CURSORS = {"nw": "nw-resize", "ne": "ne-resize", "sw": "sw-resize",
            "e": "e-resize", "w": "w-resize", "move": "move",
            "new": "crosshair"}
 ASPECTS: list[tuple[str, float | None]] = [
-    ("Free", None), ("1:1", 1.0), ("16:9", 16 / 9), ("9:16", 9 / 16),
+    ("Livre", None), ("1:1", 1.0), ("16:9", 16 / 9), ("9:16", 9 / 16),
     ("4:3", 4 / 3), ("3:4", 3 / 4),
 ]
 
@@ -224,7 +225,7 @@ class CropWindow(EditorWindow):
     """Ferramenta CROP: recorte com proporção e medidas em pixels."""
 
     def __init__(self, app, op: Op, path: Path):
-        super().__init__(app, op, "Crop Image", 680, 600, primary="Apply")
+        super().__init__(app, op, "Recortar imagem", 680, 600, primary="Aplicar")
         self.path = path
         self.src_size: tuple[int, int] | None = None
         self._syncing = False
@@ -236,7 +237,7 @@ class CropWindow(EditorWindow):
         self.aspect = Segmented([a[0] for a in ASPECTS],
                                 on_change=self._on_aspect)
         ar = Gtk.Box(spacing=10)
-        ar.append(label("Aspect ratio", hexpand=True))
+        ar.append(label("Proporção", hexpand=True))
         ar.append(self.aspect)
         self.body.append(ar)
 
@@ -245,19 +246,20 @@ class CropWindow(EditorWindow):
         self.w_spin.connect("value-changed", self._on_size, "w")
         self.h_spin.connect("value-changed", self._on_size, "h")
         sizes = Gtk.Box(spacing=6)
-        sizes.append(label("Size", hexpand=True))
+        sizes.append(label("Tamanho", hexpand=True))
         for w in (label("W", "mx-dim"), self.w_spin, label("×", "mx-dim"),
                   label("H", "mx-dim"), self.h_spin, label("px", "mx-dim")):
             sizes.append(w)
         self.body.append(sizes)
-        self.say("Loading…")
+        self.say("Carregando…")
 
         out = self.tmp / "base.png"
         bg(lambda: load_preview(path, out), self.alive(self._loaded))
 
     def _loaded(self, res) -> None:
         if isinstance(res, Exception):
-            self.say(f"Could not open the image: {res}", error=True)
+            self.say(_("Não deu para abrir a imagem: {err}").format(err=res),
+                     error=True)
             return
         self.src_size, shown, png = res
         self.canvas.set_image(texture(png), shown)
@@ -309,6 +311,6 @@ class CropWindow(EditorWindow):
     def build(self):
         rect = self.canvas.value()
         if rect is None:
-            raise ValueError("Drag on the image to choose an area.")
+            raise ValueError(_("Arraste sobre a imagem para escolher a área."))
         edit = E.ImageEdit(crop=tuple(rect))
         return E.image_edit_op(self.op, edit, " Cropped"), [self.path]

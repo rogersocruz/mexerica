@@ -16,6 +16,7 @@ from ..engine import edits as E  # noqa: E402
 from ..engine import formats as F  # noqa: E402
 from ..engine import tools as T  # noqa: E402
 from ..engine.ops import Op  # noqa: E402
+from ..i18n import N_, _  # noqa: E402
 from .base import (EditorWindow, Segmented, SliderRow, dropdown, label,  # noqa: E402
                    row, spin)
 from .common import (Latest, bg, fmt_size, image_formats, lossy,  # noqa: E402
@@ -24,7 +25,7 @@ from .crop import ASPECTS, CropCanvas, load_preview  # noqa: E402
 
 
 def _section(text: str) -> Gtk.Label:
-    lbl = label(text.upper(), "mx-dim")
+    lbl = label(_(text).upper(), "mx-dim")
     lbl.set_margin_top(6)
     return lbl
 
@@ -34,7 +35,7 @@ class ImageEditor(EditorWindow):
     formato, com prévia ao vivo."""
 
     def __init__(self, app, op: Op, path: Path):
-        super().__init__(app, op, "Edit Image", 1040, 680, primary="Save")
+        super().__init__(app, op, "Editar imagem", 1040, 680, primary="Salvar")
         self.path = path
         self.edit = E.ImageEdit()
         self.src_size: tuple[int, int] | None = None
@@ -49,51 +50,51 @@ class ImageEditor(EditorWindow):
 
         panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
                         width_request=300, margin_start=6)
-        panel.append(_section("Crop"))
+        panel.append(_section("Recorte"))
         self.aspect = Segmented([a[0] for a in ASPECTS],
                                 on_change=self._on_aspect)
         panel.append(self.aspect)
         self.crop_info = label("", "mx-dim")
         panel.append(self.crop_info)
 
-        panel.append(_section("Rotate & flip"))
+        panel.append(_section("Girar e espelhar"))
         tools = Gtk.Box(spacing=6, homogeneous=True)
         for icon, tip, cb in (
-                ("object-rotate-left-symbolic", "Rotate left (L)",
+                ("object-rotate-left-symbolic", _("Girar à esquerda (L)"),
                  lambda *_: self._rotate(-90)),
-                ("object-rotate-right-symbolic", "Rotate right (R)",
+                ("object-rotate-right-symbolic", _("Girar à direita (R)"),
                  lambda *_: self._rotate(90)),
-                ("object-flip-horizontal-symbolic", "Flip horizontal (H)",
+                ("object-flip-horizontal-symbolic", _("Espelhar na horizontal (H)"),
                  lambda *_: self._flip(True)),
-                ("object-flip-vertical-symbolic", "Flip vertical (V)",
+                ("object-flip-vertical-symbolic", _("Espelhar na vertical (V)"),
                  lambda *_: self._flip(False))):
             b = Gtk.Button(icon_name=icon, tooltip_text=tip)
             b.connect("clicked", cb)
             tools.append(b)
         panel.append(tools)
 
-        panel.append(_section("Adjust"))
+        panel.append(_section("Ajustes"))
         self.sliders = {}
-        for key, title in (("brightness", "Brightness"),
-                           ("contrast", "Contrast"),
-                           ("saturation", "Saturation")):
+        for key, title in (("brightness", N_("Brilho")),
+                           ("contrast", N_("Contraste")),
+                           ("saturation", N_("Saturação"))):
             sr = SliderRow(title, -100, 100, 0, unit="",
                            on_change=lambda v, k=key: self._on_adjust(k, v))
             self.sliders[key] = sr
             panel.append(sr)
         self.gray = Gtk.Switch(valign=Gtk.Align.CENTER)
         self.gray.connect("notify::active", lambda *_: self._on_gray())
-        panel.append(row("Black & white", self.gray))
+        panel.append(row("Preto e branco", self.gray))
 
-        panel.append(_section("Output"))
+        panel.append(_section("Saída"))
         self.scale = spin(5, 100, 100, step=5, width=4)
         self.scale.connect("value-changed", lambda *_: self._update_info())
-        panel.append(row("Scale (%)", self.scale))
+        panel.append(row("Escala (%)", self.scale))
         self.fmt_dd = dropdown([f[0] for f in self.formats])
         self.fmt_dd.connect("notify::selected",
                             lambda *_: self._update_info())
-        panel.append(row("Format", self.fmt_dd))
-        self.quality = SliderRow("Quality", 30, 100, 90, unit="")
+        panel.append(row("Formato", self.fmt_dd))
+        self.quality = SliderRow("Qualidade", 30, 100, 90, unit="")
         panel.append(self.quality)
         self.out_info = label("", "mx-dim", wrap=True)
         panel.append(self.out_info)
@@ -104,14 +105,15 @@ class ImageEditor(EditorWindow):
         body.append(self.canvas)
         body.append(scroll)
         self.body.append(body)
-        self.say("Loading…")
+        self.say("Carregando…")
         out = self.tmp / "base.png"
         bg(lambda: load_preview(path, out), self.alive(self._loaded))
 
     # --- carregamento e prévia ---------------------------------------------
     def _loaded(self, res) -> None:
         if isinstance(res, Exception):
-            self.say(f"Could not open the image: {res}", error=True)
+            self.say(_("Não deu para abrir a imagem: {err}").format(err=res),
+                     error=True)
             return
         self.src_size, self.base_size, png = res
         self.base = self.tmp / "base.png"
@@ -140,7 +142,8 @@ class ImageEditor(EditorWindow):
         shown = self._shown()
         self.render.request(
             lambda: run_out(argv),
-            self.alive(lambda r: self.say(f"Preview failed: {r}", True)
+            self.alive(lambda r: self.say(_("A prévia falhou: {err}").format(err=r),
+                                         True)
                        if isinstance(r, Exception)
                        else self.canvas.set_image(texture(r), shown)))
 
@@ -210,13 +213,14 @@ class ImageEditor(EditorWindow):
         cw = round(self.canvas.crop[2] * w)
         ch = round(self.canvas.crop[3] * h)
         self.crop_info.set_text(f"{cw} × {ch} px" +
-                                ("" if self.canvas.value() else " (full)"))
+                                ("" if self.canvas.value()
+                                 else " " + _("(inteira)")))
         s = self.scale.get_value() / 100
         ext = self._out_ext()
         self.quality.set_visible(lossy(ext))
         self.out_info.set_text(
             f"{max(1, round(cw * s))} × {max(1, round(ch * s))} px · "
-            f"{ext.upper()} · saved next to the original")
+            f"{ext.upper()} · " + _("salva ao lado da original"))
 
     def on_key(self, keyval, state) -> bool:
         if isinstance(self.get_focus(), (Gtk.Text, Gtk.SpinButton)):
@@ -238,7 +242,7 @@ class ImageEditor(EditorWindow):
         self.edit.quality = self.quality.get()
         self.edit.ext = self.formats[self.fmt_dd.get_selected()][1]
         if self.edit == E.ImageEdit(quality=self.edit.quality):
-            raise ValueError("Nothing changed yet.")
+            raise ValueError(_("Nada mudou ainda."))
         only_crop = self.edit == E.ImageEdit(crop=self.edit.crop,
                                              quality=self.edit.quality)
         suffix = " Cropped" if only_crop else " Edited"
@@ -254,13 +258,13 @@ class ImageEditor(EditorWindow):
 
 SIZES: list[tuple[str, int, int]] = [       # rótulo, escala %, lado máximo
     ("Original", 100, 0), ("75%", 75, 0), ("50%", 50, 0), ("25%", 25, 0),
-    ("Max 3840 px", 100, 3840), ("Max 2560 px", 100, 2560),
-    ("Max 1920 px", 100, 1920), ("Max 1280 px", 100, 1280),
-    ("Max 1080 px", 100, 1080), ("Max 800 px", 100, 800),
-    ("Max 512 px", 100, 512),
+    ("Até 3840 px", 100, 3840), ("Até 2560 px", 100, 2560),
+    ("Até 1920 px", 100, 1920), ("Até 1280 px", 100, 1280),
+    ("Até 1080 px", 100, 1080), ("Até 800 px", 100, 800),
+    ("Até 512 px", 100, 512),
 ]
 WEIGHTS: list[tuple[str, int]] = [
-    ("No limit", 0), ("100 KB", 100), ("200 KB", 200), ("500 KB", 500),
+    ("Sem limite", 0), ("100 KB", 100), ("200 KB", 200), ("500 KB", 500),
     ("1 MB", 1000), ("2 MB", 2000), ("5 MB", 5000),
 ]
 
@@ -268,21 +272,22 @@ WEIGHTS: list[tuple[str, int]] = [
 class ImageSizeWindow(EditorWindow):
     def __init__(self, app, op: Op, paths: list[Path]):
         n = len(paths)
-        super().__init__(app, op, "Resize" + ("" if n == 1 else f" · {n} images"),
-                         460, 360, primary="Save")
+        super().__init__(app, op, _("Tamanho") + (
+            "" if n == 1 else " · " + _("{n} imagens").format(n=n)),
+            460, 360, primary="Salvar")
         self.paths = paths
         self.formats = image_formats()
         self.estimate = Latest(250)
 
         self.size_dd = dropdown([s[0] for s in SIZES])
-        self.body.append(row("Size", self.size_dd))
+        self.body.append(row("Tamanho", self.size_dd))
         self.fmt_dd = dropdown([f[0] for f in self.formats])
-        self.body.append(row("Format", self.fmt_dd))
-        self.quality = SliderRow("Quality", 30, 100, 82, unit="",
+        self.body.append(row("Formato", self.fmt_dd))
+        self.quality = SliderRow("Qualidade", 30, 100, 82, unit="",
                                  on_change=lambda _v: self._changed())
         self.body.append(self.quality)
         self.weight_dd = dropdown([w[0] for w in WEIGHTS])
-        self.body.append(row("Max file size (JPG)", self.weight_dd))
+        self.body.append(row("Peso máximo (JPG)", self.weight_dd))
         self.result = label("", "mx-label", wrap=True)
         self.body.append(self.result)
 
@@ -305,7 +310,7 @@ class ImageSizeWindow(EditorWindow):
         ext = edit.ext or F.full_ext(self.paths[0])
         self.quality.set_visible(lossy(ext))
         self.fmt_dd.set_sensitive(not edit.target_kb)
-        self.result.set_text("Calculating…")
+        self.result.set_text(_("Calculando…"))
         src = self.paths[0]
         out = self.tmp / f"preview.{'jpg' if ext == 'jpeg' else ext}"
 
@@ -322,11 +327,11 @@ class ImageSizeWindow(EditorWindow):
 
     def _estimated(self, res) -> None:
         if isinstance(res, Exception):
-            self.result.set_text(f"No preview: {res}")
+            self.result.set_text(_("Sem prévia: {err}").format(err=res))
             return
         before, after, (w, h), (ow, oh) = res
         pct = after * 100 / before if before else 0
-        first = "" if len(self.paths) == 1 else "First image: "
+        first = "" if len(self.paths) == 1 else _("Primeira imagem: ")
         self.result.set_text(
             f"{first}{w} × {h}, {fmt_size(before)}  →  "
             f"{ow} × {oh}, {fmt_size(after)} ({pct:.0f}%)")
@@ -341,7 +346,8 @@ class ImageSizeWindow(EditorWindow):
         edit = self._edit()
         if edit == E.ImageEdit(quality=edit.quality) and \
                 not lossy(F.full_ext(self.paths[0])):
-            raise ValueError("Nothing changed: pick a size, format or limit.")
+            raise ValueError(_("Nada mudou: escolha um tamanho, formato ou "
+                               "limite."))
         return E.image_edit_op(self.op, edit, " Resized"), self.paths
 
     def cleanup(self) -> None:

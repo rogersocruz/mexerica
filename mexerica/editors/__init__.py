@@ -15,7 +15,8 @@ from .addbg import AddBgWindow
 from .crop import CropWindow
 from .image import ImageEditor, ImageSizeWindow
 from .media import TrimWindow, VideoSizeWindow
-from .pdf import PdfMergeWindow, PdfPagesWindow, PdfSplitWindow
+from .pdf import (PdfMergeWindow, PdfPagesWindow, PdfSplitWindow,
+                  PdfUnlockWindow)
 from .qr import QrWindow
 
 log = logging.getLogger("mexerica")
@@ -25,7 +26,7 @@ _SINGLE = {"img-edit": ImageEditor, "img-crop": CropWindow,
            "aud-trim": TrimWindow, "pdf-pages": PdfPagesWindow,
            "pdf-cut": PdfSplitWindow}
 _BATCH = {"img-size": ImageSizeWindow, "vid-size": VideoSizeWindow,
-          "pdf-order": PdfMergeWindow}
+          "pdf-order": PdfMergeWindow, "pdf-unlock": PdfUnlockWindow}
 
 
 def open_editor(app, op: Op, paths: list[Path]):

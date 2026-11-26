@@ -11,11 +11,14 @@ No topo, uma **prévia da roda** de verdade, que muda junto com as opções.
 
 | Opção | O que muda |
 |---|---|
-| **Estilo** | As cores da roda e das janelas: **Mexerica** (laranja, o original), **Oceano** (azul), **Menta** (verde), **Uva** (roxo) e **Grafite** (escuro, acento laranja) |
+| **Idioma** | **Automático** (padrão): português se o Windows ou o Linux estiver em português, inglês em qualquer outro idioma. Ou escolha **Português** ou **English**. Vale para as janelas, a roda, os avisos, a bandeja, o menu da barra superior do GNOME e a linha de comando; a janela de Configurações se refaz na hora |
+| **Cores** | As cores da roda e das janelas: **Mexerica** (laranja, o original), **Oceano** (azul), **Menta** (verde), **Uva** (roxo) e **Grafite** (escuro, acento laranja) |
 | **Tamanho da roda** | Pequena, Média ou Grande |
-| **Escurecer o fundo** | Quanto a tela atrás da roda escurece (0–60%). Vale no Windows e no GNOME |
-| **Opacidade das janelas** | Das janelas de edição e das notificações do Windows (60–100%) |
+| **Escurecer a tela** | Quanto a tela atrás da roda escurece (0–60%). Vale no Windows e no GNOME |
+| **Opacidade das janelas** | Das janelas de edição e das notificações do Windows (60–100%). No Windows com a transparência desligada (ou a Economia de energia ligada) as janelas ficam sólidas e o slider fica apagado |
 | **Animações** | Entrada da roda, hover e troca de roda. Desligadas, tudo aparece de uma vez |
+| **Tipo de desfoque** | O desfoque de fundo atrás da roda. **Do sistema:** o borrão do Windows (DWM) ou do GNOME Shell. **Próprio:** a Mexerica fotografa o monitor antes de a roda aparecer e borra a imagem em memória (nada é gravado); funciona mesmo com a transparência do Windows desligada. **Desligado:** só o escurecimento |
+| **Intensidade do desfoque** | 0–40 px. Vale para o desfoque próprio e para o do GNOME |
 
 ## Itens da roda
 
@@ -38,17 +41,41 @@ Um item escondido continua disponível na [linha de comando](Linha-de-comando.md
 
 | Opção | O que faz |
 |---|---|
-| **Pasta de saída** | *Ao lado do arquivo original* (padrão) ou *Sempre nesta pasta*. Se a pasta escolhida sumir, volta a salvar ao lado do original |
-| **Qualidade do JPG** | Das conversões para JPG (50–100, padrão 92). O *Editar…* tem a dele |
-| **Avisar quando um trabalho começa** | Desligado, só aparece o aviso de pronto (com Mostrar na pasta) |
-| **Iniciar com o sistema** | Sobe a Mexerica no login. No Windows, guarda o atalho da pasta Inicializar fora dela; no GNOME, grava a escolha em `~/.config/autostart` |
+| **Onde salvar** | *Na mesma pasta do arquivo original* (padrão) ou *Sempre nesta pasta*. Se a pasta escolhida sumir, volta a salvar ao lado do original |
+| **Qualidade das imagens** | Um slider por formato nas conversões da roda e do Início: **JPG** (padrão 92), **WEBP** (85, ou *sem perda*), **AVIF** (60), **HEIC** (70) e **JPEG XL** (85), mais a **compressão do PNG** (0–9, sem perda: só troca tamanho por tempo). O *Editar…*, o *Tamanho…* e o *Comprimir* têm a própria |
+| **Avisar quando uma conversão começa** | Desligado, só aparece o aviso de conclusão (com Mostrar na pasta) |
+| **Abrir ao entrar no sistema** | Sobe a Mexerica no login. No Windows, guarda o atalho da pasta Inicializar fora dela; no GNOME, grava a escolha em `~/.config/autostart` |
+| **Roda com Ctrl + botão direito** (Windows) | No Explorer e na área de trabalho, **Ctrl + botão direito** sobre arquivos selecionados abre a [roda de ações](Usando-a-roda.md#por-clique) no lugar do menu. **Tab** passa para a próxima roda (conversão, ferramentas, ações) e **Shift+Tab** volta; **Esc** fecha. **Substitui o Shift + arrastar:** com a opção ligada, arrastar segurando Shift não abre mais a roda (os dois não convivem). Sem o Ctrl, o botão direito abre o menu de sempre |
 
 ## Sobre
 
-Versão, se a detecção de arraste está ativa (no GNOME, o estado da
-extensão), os gestos, os **programas encontrados** (✓ ou —, com o que cada um
-faz), quem converte os documentos do Office e botões para **abrir o log**,
-**abrir a pasta das configurações** e **sair da Mexerica**.
+Versão, o botão **Pague me um café** (abre
+[buymeacoffee.com/rogersocruz](https://buymeacoffee.com/rogersocruz) no
+navegador), os atalhos durante o arraste e **Sair da Mexerica**. Um aviso
+aparece só se a detecção de arraste estiver desligada.
+
+### Formatos extras
+
+Uma linha por tipo de arquivo (Imagens, HEIC e AVIF, SVG, Vídeo e áudio,
+PDF, Documentos e Markdown, Documentos do Office, E-books, Metadados, QR
+code, Compactados, Dados, Fontes), com **Instalado** e um botão:
+
+- **Baixar** instala os programas daquele tipo; os itens dele aparecem na
+  roda na hora.
+- **Remover** pede confirmação e desinstala; os itens somem da roda.
+  Nunca remove o que outro programa usa: nesse caso avisa e não mexe.
+
+Como instala: no Windows, pelo MSYS2 (`pacman`) e pelo `winget` (Pandoc,
+ExifTool, LibreOffice, calibre), sem administrador. No Linux, pelo `apt`,
+`dnf` ou `pacman`, pedindo a senha (`pkexec`); no `dnf` só dá para
+instalar. Na versão da Microsoft Store os formatos já vêm incluídos.
+O que foi encontrado nesta máquina, com o caminho de cada programa:
+`mexerica doctor`.
+
+As mudanças valem na hora; o arquivo é gravado um instante depois da última
+(um slider arrastado não regrava o arquivo a cada passo). Se o arquivo
+estiver ocupado por outro programa, a Mexerica tenta de novo e a mudança
+continua valendo.
 
 ## Onde fica
 

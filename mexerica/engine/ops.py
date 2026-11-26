@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Callable
 
 from .. import settings
+from ..i18n import _
 from . import data as D
 from . import fonts as FT
 from . import formats as F
@@ -141,8 +142,7 @@ def _img_to(ext: str) -> Callable[[Ctx], list[Step]]:
             return _svg_to(ctx, ext)
         if ext in ("jpg", "bmp"):
             extra = ["-background", "white", "-alpha", "remove", "-alpha", "off"]
-        if ext == "jpg":
-            extra += ["-quality", str(settings.get()["jpeg_quality"])]
+        extra += quality_args(ext)
         if ext == "ico":
             extra = ["-resize", "256x256>", "-define",
                      "icon:auto-resize=256,128,64,48,32,16"]
@@ -150,12 +150,32 @@ def _img_to(ext: str) -> Callable[[Ctx], list[Step]]:
     return build
 
 
+# formato -> chave da qualidade nas Configurações (0..100)
+QUALITY_KEYS = {"jpg": "jpeg_quality", "webp": "webp_quality",
+                "avif": "avif_quality", "heic": "heic_quality",
+                "jxl": "jxl_quality"}
+
+
+def quality_args(ext: str) -> list[str]:
+    """Argumentos do ImageMagick para a qualidade escolhida nas
+    Configurações > Comportamento > Imagens."""
+    cfg = settings.get()
+    if ext == "webp" and cfg["webp_lossless"]:
+        return ["-define", "webp:lossless=true", "-quality", "100"]
+    if ext in QUALITY_KEYS:
+        return ["-quality", str(cfg[QUALITY_KEYS[ext]])]
+    if ext == "png":
+        return ["-define", f"png:compression-level={cfg['png_compression']}"]
+    return []
+
+
 def _svg_to(ctx: Ctx, ext: str) -> list[Step]:
     """SVG: o librsvg (rsvg-convert, já vem com o GNOME) renderiza melhor
     que o delegate do ImageMagick, que nem sempre está configurado."""
     if not T.has("rsvg-convert"):
         return [T.cmd("magick") + ["-density", "192", "-background", "none",
-                                   str(ctx.src), str(ctx.out)]]
+                                   str(ctx.src), *quality_args(ext),
+                                   str(ctx.out)]]
     rsvg = T.cmd("rsvg-convert")
     if ext in ("png", "pdf"):
         return [rsvg + ["-f", ext, "-z", "2" if ext == "png" else "1",
@@ -164,7 +184,8 @@ def _svg_to(ctx: Ctx, ext: str) -> list[Step]:
     rest = ["-background", "white", "-alpha", "remove", "-alpha", "off"] \
         if ext in ("jpg", "bmp") else []
     return [rsvg + ["-f", "png", "-z", "2", "-o", str(mid), str(ctx.src)],
-            T.cmd("magick") + [str(mid), *rest, str(ctx.out)]]
+            T.cmd("magick") + [str(mid), *rest, *quality_args(ext),
+                               str(ctx.out)]]
 
 
 def _magick_can(fmt: str) -> Callable[[], bool]:
@@ -595,7 +616,7 @@ def _read_qr(ctx: Ctx) -> list[Step]:
             raise RuntimeError(proc.stderr.strip() or "falha ao ler código")
         found = proc.stdout.strip()
         if not found:
-            raise RuntimeError("Nenhum QR code encontrado")
+            raise RuntimeError(_("Nenhum QR code encontrado"))
         c.text.append(found)
     return [run]
 
@@ -705,16 +726,16 @@ TOOL_OPS = [
        max_files=1, needs=("ffmpeg", "ffprobe"), hint="Escolher o trecho"),
     Op("pdf-pages", "Páginas…", TOOLS, frozenset({F.PDF}), mode=EDITOR,
        max_files=1, needs=("qpdf", "pdftoppm"),
-       hint="Extrair, apagar ou girar páginas"),
-    Op("pdf-order", "Juntar…", TOOLS, frozenset({F.PDF}), mode=EDITOR,
+       hint="Reordenar, girar, apagar ou extrair páginas"),
+    Op("pdf-order", "Juntar", TOOLS, frozenset({F.PDF}), mode=EDITOR,
        min_files=2, needs=("qpdf", "pdftoppm"),
-       hint="Escolher a ordem antes de juntar"),
+       hint="Ordenar, girar e apagar páginas antes de juntar"),
     Op("pdf-cut", "Dividir…", TOOLS, frozenset({F.PDF}), mode=EDITOR,
        max_files=1, needs=("qpdf", "pdftoppm"),
-       hint="Por intervalos ou a cada N páginas"),
-    Op("qr-make", "Gerar QR…", TOOLS, frozenset({F.TEXT, F.LINK}),
-       mode=EDITOR, max_files=1, needs=("qrencode",),
-       hint="QR code de um link do arquivo ou colado"),
+       hint="Página a página, um intervalo ou vários"),
+    Op("pdf-unlock", "Desbloquear…", TOOLS, frozenset({F.PDF}),
+       mode=EDITOR, needs=("qpdf",),
+       hint="Tira a senha e as restrições"),
     # imagens
     Op("img-compress", "Comprimir", TOOLS, frozenset({F.IMAGE}),
        _img_tool("-strip", "-quality", "75"), suffix=" Compressed",
@@ -735,8 +756,6 @@ TOOL_OPS = [
     Op("img-gray", "P&B", TOOLS, frozenset({F.IMAGE}),
        _img_tool("-colorspace", "Gray"), suffix=" Grayscale", needs=("magick",),
        in_wheel=False),
-    Op("img-qr", "Ler QR", TOOLS, frozenset({F.IMAGE}), _read_qr,
-       result=TEXT, needs=("zbarimg",), hint="Copia o conteúdo"),
     Op("img-pdf", "Juntar PDF", TOOLS, frozenset({F.IMAGE}),
        lambda c: [T.cmd("magick") + [*map(str, c.srcs), "-auto-orient",
                                      str(c.out)]],
@@ -826,11 +845,6 @@ TOOL_OPS = [
                   [T.cmd("pdfimages") + ["-all", str(c.src),
                                          str(c.out / "img")]])[1],
        result=DIR, suffix=" Images", needs=("pdfimages",)),
-    Op("pdf-merge", "Juntar", TOOLS, frozenset({F.PDF}),
-       lambda c: [T.cmd("qpdf") + ["--empty", "--pages",
-                                   *map(str, c.srcs), "--", str(c.out)]],
-       suffix=" Merged", mode=ALL, min_files=2, needs=("qpdf",),
-       hint="Na ordem da seleção"),
     # genéricas
     Op("strip-meta", "Sem metadados", TOOLS,
        frozenset({F.IMAGE, F.PDF, F.VIDEO, F.AUDIO}), _strip,
@@ -853,6 +867,12 @@ ACTION_OPS = [
     Op("act-move-to", "Mover para…", ACTIONS, frozenset(F.ANY), mode=ACTION),
     Op("act-float", "Flutuar", ACTIONS, frozenset(F.ANY), mode=ACTION,
        hint="Janela flutuante para arrastar depois"),
+    # QR code: gerar (janela) e ler (copia o conteúdo)
+    Op("qr-make", "Gerar QR…", ACTIONS, frozenset(F.ANY),
+       mode=EDITOR, max_files=1, needs=("qrencode",),
+       hint="QR code de um link, salvo na pasta do arquivo"),
+    Op("img-qr", "Ler QR", ACTIONS, frozenset({F.IMAGE}), _read_qr,
+       result=TEXT, needs=("zbarimg",), hint="Copia o conteúdo"),
     Op("act-zip-all", "ZIP", ACTIONS, frozenset(F.ANY), _pack("zip"),
        ext="zip", mode=ALL, needs=("bsdtar",), hint="Tudo num ZIP"),
 ]

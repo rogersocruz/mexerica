@@ -16,12 +16,13 @@ from ..engine import edits as E  # noqa: E402
 from ..engine import formats as F  # noqa: E402
 from ..engine import tools as T  # noqa: E402
 from ..engine.ops import Op  # noqa: E402
+from ..i18n import N_, _  # noqa: E402
 from .base import EditorWindow, dropdown, label, row  # noqa: E402
 from .common import Latest, bg, fmt_size, fmt_time, run_out, texture  # noqa: E402
 
 
 def _section(text: str) -> Gtk.Label:
-    return label(text.upper(), "mx-dim")
+    return label(_(text).upper(), "mx-dim")
 
 
 MIN_CLIP = 0.1
@@ -30,9 +31,9 @@ MIN_CLIP = 0.1
 class TrimWindow(EditorWindow):
     def __init__(self, app, op: Op, path: Path):
         self.video = F.kind_of(path) == F.VIDEO
-        super().__init__(app, op, "Trim Video" if self.video
-                         else "Trim Audio", 900 if self.video else 720,
-                         640 if self.video else 380, primary="Save")
+        super().__init__(app, op, "Cortar vídeo" if self.video
+                         else "Cortar áudio", 900 if self.video else 720,
+                         640 if self.video else 380, primary="Salvar")
         self.path = path
         self.dur = 0.0
         self.start = 0.0
@@ -51,7 +52,7 @@ class TrimWindow(EditorWindow):
         if self.video:
             frames = Gtk.Box(spacing=14, homogeneous=True, vexpand=True)
             self.pics = {}
-            for key, title in (("start", "Start"), ("end", "End")):
+            for key, title in (("start", N_("Começo")), ("end", N_("Fim"))):
                 col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
                 col.append(_section(title))
                 pic = Gtk.Picture(content_fit=Gtk.ContentFit.CONTAIN,
@@ -85,7 +86,7 @@ class TrimWindow(EditorWindow):
         # campos numéricos
         fields = Gtk.Box(spacing=10)
         self.spin = {}
-        for key, title in (("start", "Start (s)"), ("end", "End (s)")):
+        for key, title in (("start", N_("Começo (s)")), ("end", N_("Fim (s)"))):
             sp = Gtk.SpinButton.new_with_range(0, 1, 0.1)
             sp.set_digits(2)
             sp.connect("value-changed", self._on_spin, key)
@@ -99,22 +100,23 @@ class TrimWindow(EditorWindow):
 
         opts = Gtk.Box(spacing=18)
         self.play_btn = Gtk.Button(icon_name="media-playback-start-symbolic",
-                                   tooltip_text="Play the selection (Space)",
+                                   tooltip_text=_("Ouvir o trecho (Espaço)"),
                                    visible=T.has("ffplay"))
         self.play_btn.connect("clicked", lambda *_: self._toggle_play())
         opts.append(self.play_btn)
-        self.fast = Gtk.CheckButton(label="Fast (no re-encode)",
+        self.fast = Gtk.CheckButton(label=_("Rápido (sem recodificar)"),
                                     active=True)
-        self.fast.set_tooltip_text(
-            "Instant and lossless. For video the start may move back to the "
-            "previous keyframe; turn off for an exact cut.")
+        self.fast.set_tooltip_text(_(
+            "Na hora e sem perda. No vídeo, o começo pode voltar até o "
+            "quadro-chave anterior; desligue para um corte exato."))
         self.fast.connect("toggled", self._on_fast_toggled)
         opts.append(self.fast)
-        self.cut_out = Gtk.CheckButton(label="Remove selection (keep the rest)")
+        self.cut_out = Gtk.CheckButton(
+            label=_("Tirar o trecho (manter o resto)"))
         self.cut_out.connect("toggled", lambda *_: self._check_keyframe())
         opts.append(self.cut_out)
         box.append(opts)
-        self.say("Loading…")
+        self.say("Carregando…")
         self._load()
 
     # --- carregamento ---------------------------------------------------
@@ -154,7 +156,8 @@ class TrimWindow(EditorWindow):
 
     def _got_duration(self, res) -> None:
         if isinstance(res, Exception):
-            self.say(f"Could not read the duration: {res}", error=True)
+            self.say(_("Não deu para ler a duração: {err}").format(err=res),
+                     error=True)
             return
         self.dur = res
         self.start, self.end = 0.0, res
@@ -164,7 +167,7 @@ class TrimWindow(EditorWindow):
             self.spin[key].set_value(getattr(self, key))
         self._syncing = False
         self.save_btn.set_sensitive(True)
-        self.say("Drag the handles or type the times.")
+        self.say("Arraste as alças ou digite os tempos.")
         self._changed("start")
         self._changed("end")
 
@@ -335,14 +338,15 @@ class TrimWindow(EditorWindow):
             self.fast.set_active(gap <= 0.3)
             self._syncing = False
         if gap > 0.3 and self.fast.get_active():
-            self.say(f"Fast cut starts at {fmt_time(kf)} (keyframe), "
-                     f"{gap:.1f} s early. Turn off “Fast” for an exact cut.",
+            self.say(_("O corte rápido começa em {t} (quadro-chave), "
+                       "{gap:.1f} s antes. Desligue o “Rápido” para um "
+                       "corte exato.").format(t=fmt_time(kf), gap=gap),
                      error=True)
         elif gap > 0.3:
-            self.say(f"Exact cut (re-encodes): nearest keyframe is "
-                     f"{gap:.1f} s earlier.")
+            self.say(_("Corte exato (recodifica): o quadro-chave mais "
+                       "perto fica {gap:.1f} s antes.").format(gap=gap))
         else:
-            self.say("Fast cut starts exactly where you chose.")
+            self.say("O corte rápido começa exatamente onde você escolheu.")
 
     def _draw(self, _area, cr, W, H) -> None:
         if not self.dur:
@@ -385,12 +389,13 @@ class TrimWindow(EditorWindow):
         s, e = self.start, self.end
         remove = self.cut_out.get_active()
         if e - s < MIN_CLIP:
-            raise ValueError("Selection is too short.")
+            raise ValueError(_("O trecho é curto demais."))
         whole = s < 0.05 and e > self.dur - 0.05
         if whole and not remove:
-            raise ValueError("The selection is the whole file: move the handles.")
+            raise ValueError(_("O trecho é o arquivo inteiro: mexa nas "
+                               "alças."))
         if whole and remove:
-            raise ValueError("That would remove the whole file.")
+            raise ValueError(_("Isso tiraria o arquivo inteiro."))
         return (E.trim_op(self.op, s, e, self.fast.get_active(), remove),
                 [self.path])
 
@@ -405,8 +410,8 @@ class TrimWindow(EditorWindow):
 # --------------------------------------------------------------------------
 
 TARGETS: list[tuple[str, float]] = [
-    ("Quality only (CRF 26)", 0), ("8 MB", 8), ("10 MB", 10), ("25 MB", 25),
-    ("50 MB", 50), ("100 MB", 100), ("Custom…", -1),
+    ("Só qualidade (CRF 26)", 0), ("8 MB", 8), ("10 MB", 10), ("25 MB", 25),
+    ("50 MB", 50), ("100 MB", 100), ("Outro…", -1),
 ]
 HEIGHTS: list[tuple[str, int]] = [
     ("Original", 0), ("1080p", 1080), ("720p", 720), ("480p", 480),
@@ -417,25 +422,25 @@ HEIGHTS: list[tuple[str, int]] = [
 class VideoSizeWindow(EditorWindow):
     def __init__(self, app, op: Op, paths: list[Path]):
         n = len(paths)
-        super().__init__(app, op, "Resize Video" + ("" if n == 1 else
-                                                    f" · {n} videos"),
-                         460, 330, primary="Save")
+        super().__init__(app, op, _("Tamanho do vídeo") + (
+            "" if n == 1 else " · " + _("{n} vídeos").format(n=n)),
+            460, 330, primary="Salvar")
         self.paths = paths
         self.durs: list[float] = []
 
         box = self.body
         self.target_dd = dropdown([t[0] for t in TARGETS], 3)
-        box.append(row("Fit into", self.target_dd))
+        box.append(row("Caber em", self.target_dd))
         self.custom = Gtk.SpinButton.new_with_range(1, 4000, 1)
         self.custom.set_value(20)
-        self.custom_row = row("Size (MB)", self.custom)
+        self.custom_row = row("Tamanho (MB)", self.custom)
         self.custom_row.set_visible(False)
         box.append(self.custom_row)
         self.height_dd = dropdown([h[0] for h in HEIGHTS])
-        box.append(row("Max resolution", self.height_dd))
+        box.append(row("Resolução máxima", self.height_dd))
         self.mute = Gtk.Switch(valign=Gtk.Align.CENTER)
-        box.append(row("Remove audio", self.mute))
-        self.result = Gtk.Label(xalign=0, wrap=True, label="Reading…")
+        box.append(row("Tirar o áudio", self.mute))
+        self.result = Gtk.Label(xalign=0, wrap=True, label=_("Lendo…"))
         self.result.add_css_class("mx-label")
         box.append(self.result)
 
@@ -448,7 +453,8 @@ class VideoSizeWindow(EditorWindow):
 
     def _got_durations(self, res) -> None:
         if isinstance(res, Exception):
-            self.result.set_text(f"Could not read the duration: {res}")
+            self.result.set_text(_("Não deu para ler a duração: {err}").format(
+                err=res))
             return
         self.durs = res
         self.save_btn.set_sensitive(True)
@@ -466,17 +472,21 @@ class VideoSizeWindow(EditorWindow):
         mb = self._target()
         size = sum(p.stat().st_size for p in self.paths)
         shortest = min(self.durs)
-        msg = (f"{len(self.paths)} file(s), {fmt_size(size)}, "
-               f"{fmt_time(sum(self.durs))} total.")
+        msg = _("{n} arquivo(s), {size}, {time} no total.").format(
+            n=len(self.paths), size=fmt_size(size),
+            time=fmt_time(sum(self.durs)))
         if mb:
             audio = 0 if self.mute.get_active() else 96
             kbps = mb * 8192 * 0.93 / max(max(self.durs), 0.1) - audio
-            msg += f"\nVideo at ~{max(kbps, 60):.0f} kbps."
+            msg += "\n" + _("Vídeo a ~{kbps:.0f} kbps.").format(
+                kbps=max(kbps, 60))
             if kbps < 350 and HEIGHTS[self.height_dd.get_selected()][1] in \
                     (0, 1080):
-                msg += " Low for this resolution: pick 720p or 480p."
+                msg += " " + _("Baixo para esta resolução: escolha "
+                               "720p ou 480p.")
         else:
-            msg += f"\nShortest: {fmt_time(shortest)}."
+            msg += "\n" + _("O mais curto: {t}.").format(
+                t=fmt_time(shortest))
         self.result.set_text(msg)
 
     def reset(self) -> None:

@@ -12,6 +12,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import GLib, Gtk  # noqa: E402
+from ..i18n import _  # noqa: E402
 
 TOAST_TITLE = "mexerica-toast"
 TOAST_MS = 6000            # some sozinho; o de progresso fica até ser trocado
@@ -32,7 +33,7 @@ class Toast(Gtk.Window):
                                    max_width_chars=34)
         self.title_lbl.add_css_class("mx-title")
         close = Gtk.Button(label="×", valign=Gtk.Align.START,
-                           tooltip_text="Close")
+                           tooltip_text=_("Fechar"))
         close.add_css_class("mx-close")
         close.connect("clicked", lambda *_: self.close())
         head = Gtk.Box(spacing=8)

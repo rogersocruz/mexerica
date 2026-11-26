@@ -35,10 +35,31 @@ PyGObject com GTK 4; o resto é opcional.
 
 ## Conferir e desinstalar
 
-- `mexerica doctor` mostra o que foi encontrado (o mesmo que
-  **Configurações > Sobre**).
+- `mexerica doctor` mostra o que foi encontrado. Para instalar ou tirar
+  os programas de um tipo de arquivo: **Configurações > Sobre > Formatos
+  extras**.
 - `./uninstall.sh` remove tudo o que o `install.sh` pôs. Log e cache ficam em
   `~/.cache/mexerica` e as configurações em `~/.config/mexerica`.
+
+## COSMIC e outros desktops
+
+No **COSMIC** (Pop!_OS 24.04 em diante), no KDE, no Sway e no Hyprland não
+há a extensão do GNOME Shell, e nenhum programa consegue ver o Shift
+durante um arraste (o Wayland só entrega o arraste a quem está embaixo do
+ponteiro). Nesses desktops:
+
+1. Crie um atalho de teclado que rode `mexerica wheel` (COSMIC:
+   *Configurações > Teclado > Atalhos personalizados*; por exemplo
+   Super+M). Para abrir direto a roda de ferramentas:
+   `mexerica wheel --group tools`.
+2. Comece a arrastar o arquivo, aperte o atalho e solte o arquivo no item
+   da roda. Ou aperte o atalho antes e arraste até a roda.
+
+Com o **gtk4-layer-shell** instalado (`sudo apt install
+libgtk4-layer-shell0 gir1.2-gtk4layershell-1.0`), a roda fica numa camada
+acima de tudo, sem roubar o foco; sem ele, ela abre como uma janela
+maximizada. A própria Mexerica escurece a tela atrás da roda (o borrão do
+GNOME não existe aqui).
 
 ## Limitações do GNOME
 

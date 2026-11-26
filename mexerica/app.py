@@ -35,6 +35,7 @@ from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 from . import APP_ID, __version__, cache_dir, history, settings  # noqa: E402
 from . import desktop  # noqa: E402
 from . import theme as TH  # noqa: E402
+from .i18n import _, plural  # noqa: E402
 from .floating import FloatWindow  # noqa: E402
 from .engine import ACTIONS, CONVERT, TOOLS, options_for, run  # noqa: E402
 from .engine import tools as T  # noqa: E402
@@ -42,6 +43,7 @@ from .engine.ops import ACTION, EDITOR, TEXT, Op  # noqa: E402
 from .engine import BY_ID  # noqa: E402
 from .editors import open_editor  # noqa: E402
 from .engine.runner import unique_path  # noqa: E402
+from .wheel import backdrop  # noqa: E402
 from .wheel.geometry import Wheel  # noqa: E402
 from .wheel.render import Snapshot, WheelState, draw  # noqa: E402
 
@@ -49,6 +51,7 @@ log = logging.getLogger("mexerica")
 
 OVERLAY_TITLE = "mexerica-overlay"     # a extensão reconhece por este título
 IDLE_HIDE_MS = 4000      # trava de segurança: overlay sem atividade some
+STICKY_HIDE_MS = 30000   # roda aberta por clique: tempo para escolher
 
 # + TH.CSS, que muda com o estilo (apply_settings)
 CSS = """
@@ -83,7 +86,7 @@ def _caption(paths: list[Path]) -> str:
         return ""
     if len(paths) == 1:
         return paths[0].name
-    return f"{len(paths)} arquivos"
+    return _("{n} arquivos").format(n=len(paths))
 
 
 def _size_caption(paths: list[Path]) -> str:
@@ -97,7 +100,7 @@ def _size_caption(paths: list[Path]) -> str:
             pass
     if total:
         return TH.human_size(total)
-    return f"{len(paths)} items" if paths else ""
+    return _("{n} itens").format(n=len(paths)) if paths else ""
 
 
 # --------------------------------------------------------------------------
@@ -122,6 +125,7 @@ class Overlay(Gtk.Window):
         self._ticking = False
         self._idle_src = 0
         self._dragging = False
+        self._sticky = False
 
         self.area = Gtk.DrawingArea(hexpand=True, vexpand=True)
         self.area.set_draw_func(self._on_draw)
@@ -144,13 +148,23 @@ class Overlay(Gtk.Window):
         click.connect("released", self._on_click)
         self.area.add_controller(click)
 
+        # roda aberta por clique: a rodinha do mouse troca de roda
+        scroll = Gtk.EventControllerScroll(
+            flags=Gtk.EventControllerScrollFlags.VERTICAL
+            | Gtk.EventControllerScrollFlags.DISCRETE)
+        scroll.connect("scroll", self._on_scroll)
+        self.area.add_controller(scroll)
+
         keys = Gtk.EventControllerKey()
         keys.connect("key-pressed", self._on_key)
         self.add_controller(keys)
 
     # -- abrir/fechar ------------------------------------------------------
-    def open(self, mode: str, paths: list[Path], x: int, y: int) -> None:
+    def open(self, mode: str, paths: list[Path], x: int, y: int,
+             sticky: bool = False) -> None:
         first = not self.get_visible()
+        # por clique (sem arraste): espera a escolha por mais tempo
+        self._sticky = sticky
         st = self.state
         if not first and mode != st.mode and self.ops:
             # troca de modo: os setores antigos somem enquanto os novos
@@ -191,7 +205,9 @@ class Overlay(Gtk.Window):
     def _arm_idle_hide(self) -> None:
         if self._idle_src:
             GLib.source_remove(self._idle_src)
-        self._idle_src = GLib.timeout_add(IDLE_HIDE_MS, self._idle_hide)
+        self._idle_src = GLib.timeout_add(
+            STICKY_HIDE_MS if self._sticky else IDLE_HIDE_MS,
+            self._idle_hide)
 
     def _idle_hide(self):
         self._idle_src = 0
@@ -207,7 +223,7 @@ class Overlay(Gtk.Window):
         self.ops = options_for(self.paths, self.state.mode, settings.shows)
         self.state.labels = [TH.wheel_label(op) for op in self.ops]
         self.state.icons = [TH.wheel_icon(op) for op in self.ops]
-        self.state.hints = [op.hint for op in self.ops]
+        self.state.hints = [_(op.hint) for op in self.ops]
         self.state.caption = _size_caption(self.paths)
         self.state.loading = not self.paths
         self.wheel = None
@@ -237,6 +253,11 @@ class Overlay(Gtk.Window):
         return wheel.hit(x, y), wheel.in_cancel(x, y)
 
     def _on_draw(self, _area, cr, w, h) -> None:
+        shot = getattr(self.app.desktop, "overlay_backdrop", None)
+        if shot is not None:
+            # desfoque próprio: a tela borrada entra junto com a roda
+            backdrop.paint_backdrop(cr, shot, w, h,
+                                    min(self.state.progress, 1.0))
         dim = self.app.desktop.overlay_dim
         if dim:
             # sem um compositor que escureça o fundo (Windows), a própria
@@ -335,10 +356,41 @@ class Overlay(Gtk.Window):
         if idx is not None and idx < len(self.ops) and paths:
             self.app.execute(self.ops[idx], paths)
 
-    def _on_key(self, _c, keyval, _code, _state) -> bool:
+    # -- trocar de roda (roda aberta por clique) ---------------------------
+    @property
+    def sticky(self) -> bool:
+        return self._sticky
+
+    def switch_mode(self, mode: str) -> None:
+        """Outra roda com os mesmos arquivos, no mesmo lugar."""
+        if not self.get_visible() or mode == self.state.mode:
+            return
+        x, y = self.center
+        self.open(mode, [], int(x), int(y), sticky=self._sticky)
+
+    def cycle(self, step: int) -> None:
+        """Próxima (+1) ou anterior (-1) roda: conversão, ferramentas,
+        ações."""
+        order = [CONVERT, TOOLS, ACTIONS]
+        i = order.index(self.state.mode) if self.state.mode in order else 0
+        self.switch_mode(order[(i + step) % len(order)])
+
+    def _on_scroll(self, _c, _dx, dy) -> bool:
+        if not self._sticky or not dy:
+            return False
+        self.cycle(1 if dy > 0 else -1)
+        return True
+
+    def _on_key(self, _c, keyval, _code, state) -> bool:
         n = len(self.ops)
         if keyval == Gdk.KEY_Escape:
             self.close_wheel()
+            return True
+        if self._sticky and keyval in (Gdk.KEY_Tab, Gdk.KEY_ISO_Left_Tab):
+            # roda do Ctrl + botão direito: Tab troca de roda
+            back = keyval == Gdk.KEY_ISO_Left_Tab or \
+                bool(state & Gdk.ModifierType.SHIFT_MASK)
+            self.cycle(-1 if back else 1)
             return True
         if n and keyval in (Gdk.KEY_Right, Gdk.KEY_Down, Gdk.KEY_Tab):
             self.state.hover = 0 if self.state.hover is None \
@@ -369,7 +421,7 @@ class TextWindow(Gtk.Window):
                          default_height=560)
         header = Gtk.HeaderBar()
         copy = Gtk.Button(icon_name="edit-copy-symbolic",
-                          tooltip_text="Copiar tudo")
+                          tooltip_text=_("Copiar tudo"))
         copy.connect("clicked", lambda *_: app.set_clipboard(text))
         header.pack_end(copy)
         self.set_titlebar(header)
@@ -395,6 +447,8 @@ class MexericaApp(Gtk.Application):
         self.desktop = desktop.backend(self)
         self.settings_window = None
         self.argv_files: list[str] = []      # sem D-Bus, o Windows repassa
+        self.pending_wheel = None            # mexerica wheel sem serviço
+        self._last_wheel = (None, 0.0)
         self._job = 0
         self._keep_windows: list[Gtk.Window] = []
         self._css = Gtk.CssProvider()
@@ -425,6 +479,10 @@ class MexericaApp(Gtk.Application):
         add("settings", None, lambda *_: self.show_settings("look"))
         add("quit", None, lambda *_: self.quit())
         self.desktop.start()
+        if self.pending_wheel:                   # mexerica wheel, sem serviço
+            mode, paths = self.pending_wheel
+            GLib.timeout_add(300, lambda: (self.request_wheel(mode, paths),
+                                           False)[1])
         # a primeira roda não espera pelas sondagens lentas (magick)
         threading.Thread(target=T.warm_up, daemon=True).start()
         log.info("Mexerica %s iniciado (pid %s, %s)", __version__,
@@ -434,14 +492,18 @@ class MexericaApp(Gtk.Application):
         # Aberto pelo menu de apps (ou de novo, com o serviço rodando).
         self.show_home()
 
-    def do_open(self, files, _n_files, _hint):
+    def do_open(self, files, _n_files, hint):
         # "Converter com a Mexerica": um arquivo por chamada no Explorer,
         # todos de uma vez no Nautilus
         paths = [Path(f.get_path()) for f in files if f.get_path()]
+        if hint.startswith("wheel:"):            # mexerica wheel
+            self.request_wheel(hint[6:], paths)
+            return
         log.info("abrindo %d arquivo(s) no Início", len(paths))
         self.show_home(paths, merge=True)
 
     def do_shutdown(self):
+        settings.flush()             # o que um slider deixou só na memória
         self.desktop.stop()          # tira o ícone da bandeja
         Gtk.Application.do_shutdown(self)
 
@@ -458,6 +520,19 @@ class MexericaApp(Gtk.Application):
         if self.overlay is not None:
             self.overlay.wheel = None
             self.overlay.area.queue_draw()
+        # janelas abertas (edição, bolha da Flutuar) desenham com o cairo e
+        # as cores do tema: sem isto só mudavam ao reabrir
+        for win in self.get_windows():
+            _redraw(win)
+
+    def relabel(self) -> None:
+        """O idioma mudou: o que já está montado (bandeja, roda) refaz os
+        textos. As janelas de edição abertas mudam na próxima vez."""
+        if self.overlay is not None:
+            self.overlay.wheel = None
+        relabel = getattr(self.desktop, "relabel", None)
+        if relabel is not None:
+            relabel()
 
     def show_settings(self, page: str | None = None) -> None:
         from .settings_window import SettingsWindow
@@ -478,12 +553,27 @@ class MexericaApp(Gtk.Application):
 
     # -- roda ----------------------------------------------------------------
     def show_wheel(self, mode: str, paths: list[Path], x: int = 0,
-                   y: int = 0) -> None:
+                   y: int = 0, sticky: bool = False) -> None:
         if mode not in (CONVERT, TOOLS, ACTIONS):
             mode = CONVERT
         if self.overlay is None:
             self.overlay = Overlay(self)
-        self.overlay.open(mode, paths, x, y)
+        self.overlay.open(mode, paths, x, y, sticky=sticky)
+
+    def request_wheel(self, mode: str, paths: list[Path],
+                      at: tuple[int, int] | None = None) -> None:
+        """A roda no ponteiro, por clique (menu de contexto, Ctrl + clique
+        direito, mexerica wheel). O Explorer chama o menu uma vez por item
+        selecionado, todas com a seleção inteira: pedidos iguais em
+        sequência viram um só."""
+        key = (mode, tuple(paths))
+        now = GLib.get_monotonic_time() / 1e6
+        if key == self._last_wheel[0] and now - self._last_wheel[1] < 2.0:
+            return
+        self._last_wheel = (key, now)
+        log.info("roda %s por clique com %d item(ns)", mode, len(paths))
+        self.desktop.anchor_at(at)
+        self.show_wheel(mode, paths, *(at or (0, 0)), sticky=True)
 
     def hide_wheel(self) -> None:
         if self.overlay is not None and self.overlay.get_visible():
@@ -520,10 +610,10 @@ class MexericaApp(Gtk.Application):
             return False
         self._job += 1
         job_id = f"job-{self._job}"
-        verb = {CONVERT: "Convertendo", TOOLS: "Processando",
-                ACTIONS: "Executando"}[op.group]
+        verb = {CONVERT: _("Convertendo"), TOOLS: _("Processando"),
+                ACTIONS: _("Executando")}[op.group]
         if settings.get()["notify_start"]:
-            self.notify(job_id, f"{verb}: {op.label}", _caption(paths),
+            self.notify(job_id, f"{verb}: {_(op.label)}", _caption(paths),
                         progress=True)
 
         def worker():
@@ -543,9 +633,9 @@ class MexericaApp(Gtk.Application):
             text = "\n\n".join(res.texts)
             if op.id == "img-qr":
                 self.set_clipboard(text)
-                self.notify(job_id, "QR copiado", text[:200])
+                self.notify(job_id, _("QR copiado"), text[:200])
             else:
-                win = TextWindow(self, f"{op.label} — {_caption(paths)}",
+                win = TextWindow(self, f"{_(op.label)} — {_caption(paths)}",
                                  text)
                 win.present()
                 self.desktop.withdraw(job_id)
@@ -560,14 +650,15 @@ class MexericaApp(Gtk.Application):
             self.settings_window.home.refresh_recent()
         uris = [Gio.File.new_for_path(str(p)).get_uri() for p in res.outputs]
         first = res.outputs[0]
-        title = f"Pronto: {first.name}" if len(res.outputs) == 1 \
-            else f"Pronto: {len(res.outputs)} arquivos"
-        body = f"Salvo em {_short(first.parent)}"
+        title = _("Pronto: {name}").format(name=first.name) \
+            if len(res.outputs) == 1 else \
+            _("Pronto: {n} arquivos").format(n=len(res.outputs))
+        body = _("Salvo em {folder}").format(folder=_short(first.parent))
         if res.errors:
-            body += f" — {len(res.errors)} falharam"
+            body += " — " + _("{n} falharam").format(n=len(res.errors))
         self.notify(job_id, title, body,
-                    buttons=[("Mostrar na pasta", "app.reveal", uris),
-                             ("Abrir", "app.open-file", uris[:1])],
+                    buttons=[(_("Mostrar na pasta"), "app.reveal", uris),
+                             (_("Abrir"), "app.open-file", uris[:1])],
                     default=("app.reveal", uris))
         return False
 
@@ -577,16 +668,17 @@ class MexericaApp(Gtk.Application):
 
     def _notify_errors(self, job_id, op, errors) -> None:
         first = errors[0][1].strip().splitlines()
-        detail = first[-1] if first else "erro"
-        self.notify(job_id, f"Falhou: {op.label}", detail[:240],
-                    buttons=[("Ver log", "app.open-log", None)])
+        detail = _(first[-1]) if first else _("erro")
+        self.notify(job_id, _("Falhou: {what}").format(what=_(op.label)),
+                    detail[:240],
+                    buttons=[(_("Ver log"), "app.open-log", None)])
 
     # -- ações de arquivo --------------------------------------------------
     def _run_action(self, op: Op, paths: list[Path]) -> None:
         if op.id == "act-copy-path":
             text = "\n".join(str(p) for p in paths)
             self.set_clipboard(text)
-            self.notify("copy-path", "Caminho copiado", text[:200])
+            self.notify("copy-path", _("Caminho copiado"), text[:200])
         elif op.id == "act-terminal":
             self.open_terminal(paths[0] if paths[0].is_dir()
                                else paths[0].parent)
@@ -598,7 +690,8 @@ class MexericaApp(Gtk.Application):
 
     def _choose_folder(self, paths, move: bool) -> None:
         dialog = Gtk.FileDialog(
-            title="Mover para…" if move else "Copiar para…", modal=False)
+            title=_("Mover para…") if move else _("Copiar para…"),
+            modal=False)
         dialog.set_initial_folder(Gio.File.new_for_path(str(paths[0].parent)))
         parent = self.desktop.dialog_parent()
 
@@ -632,14 +725,18 @@ class MexericaApp(Gtk.Application):
         uris = [Gio.File.new_for_path(str(o)).get_uri() for o in outs]
 
         def report():
-            verb = "Movido" if move else "Copiado"
             if outs:
-                self.notify("copy-move", f"{verb}: {len(outs)} item(ns)",
-                            f"para {_short(dest)}"
-                            + (f" — {len(errs)} falharam" if errs else ""),
-                            buttons=[("Mostrar", "app.reveal", uris)])
+                title = (plural(len(outs), "Movido: 1 item",
+                                "Movidos: {n} itens") if move else
+                         plural(len(outs), "Copiado: 1 item",
+                                "Copiados: {n} itens"))
+                self.notify("copy-move", title,
+                            _("para {folder}").format(folder=_short(dest))
+                            + (" — " + _("{n} falharam").format(n=len(errs))
+                               if errs else ""),
+                            buttons=[(_("Mostrar"), "app.reveal", uris)])
             else:
-                self.notify("copy-move", "Falhou", errs[0][1][:200])
+                self.notify("copy-move", _("Falhou"), errs[0][1][:200])
             return False
         GLib.idle_add(report)
 
@@ -673,8 +770,35 @@ def _short(path: Path) -> str:
     return "~" + s[len(home):] if s.startswith(home) else s
 
 
-def main(argv=None) -> int:
+def main(argv=None, wheel: tuple[str, list[Path]] | None = None) -> int:
+    """`wheel`: (modo, arquivos) para abrir a roda no ponteiro (mexerica
+    wheel). Com o serviço no ar, o pedido vai para ele; sem, este processo
+    vira o serviço e abre a roda."""
     argv = argv if argv is not None else sys.argv
     app = MexericaApp()
     app.argv_files = [a for a in argv[1:] if not a.startswith("-")]
+    if wheel is not None:
+        mode, paths = wheel
+        if sys.platform != "win32":
+            app.register(None)
+            if app.get_is_remote():
+                if paths:
+                    app.open([Gio.File.new_for_path(str(p)) for p in paths],
+                             f"wheel:{mode}")
+                else:                   # roda vazia: espera o arraste
+                    app.activate_action("show", GLib.Variant(
+                        "(sasii)", (mode, [], 0, 0)))
+                return 0
+        app.pending_wheel = wheel
+        argv = [argv[0], "--gapplication-service"]
     return app.run(argv)
+
+
+def _redraw(widget) -> None:
+    """queue_draw na árvore toda (as DrawingArea não redesenham sozinhas
+    quando só o CSS muda)."""
+    widget.queue_draw()
+    child = widget.get_first_child()
+    while child is not None:
+        _redraw(child)
+        child = child.get_next_sibling()

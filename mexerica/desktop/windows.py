@@ -21,6 +21,7 @@ import math
 import os
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -36,6 +37,8 @@ from . import drag as D  # noqa: E402
 from . import hotkeys as H  # noqa: E402
 from . import win32 as W  # noqa: E402
 from .toast import Toast  # noqa: E402
+from ..i18n import _  # noqa: E402
+from ..wheel import backdrop  # noqa: E402
 
 log = logging.getLogger("mexerica")
 
@@ -84,6 +87,8 @@ class WindowsDesktop:
         self._monitor: W.Rect | None = None
         self._toasts: dict[str, Toast] = {}
         self.tray: W.Tray | None = None
+        self.overlay_backdrop = None     # desfoque próprio (backdrop.py)
+        self._tab_down = False
         W.load_gdk_win32()
 
     @property
@@ -109,9 +114,20 @@ class WindowsDesktop:
         GLib.timeout_add(D.IDLE_POLL_MS, self._tick)
         self._start_tray()
         self._offer_hotkeys()
+        if settings.get()["right_click_wheel"]:
+            self.set_right_click(True)
+        self._drop_old_menu_item()
         log.info("detecção de arraste do Windows ativa")
 
+    def relabel(self) -> None:
+        """Idioma novo: a bandeja é refeita com o menu traduzido."""
+        if self.tray is not None:
+            self.tray.remove()
+            self.tray = None
+        self._start_tray()
+
     def stop(self) -> None:
+        self.set_right_click(False)
         if self.tray is not None:
             self.tray.remove()
             self.tray = None
@@ -122,20 +138,71 @@ class WindowsDesktop:
             return lambda: GLib.idle_add(lambda: (action(), False)[1])
         try:
             self.tray = W.Tray(
-                ICON, "Mexerica: arraste um arquivo e segure Shift",
+                ICON, _("Mexerica: arraste um arquivo e segure Shift"),
                 on_open=later(self.app.show_home),
                 on_files=lambda paths: GLib.idle_add(
                     lambda: (self.app.show_home(paths, merge=True), False)[1]),
-                menu=[("Abrir a Mexerica", later(self.app.show_home)),
-                      ("Configurações…",
+                # mexerica wheel (linha de comando)
+                on_wheel=lambda mode, paths: GLib.idle_add(
+                    lambda: (self.app.request_wheel(mode, paths), False)[1]),
+                menu=[(_("Abrir a Mexerica"), later(self.app.show_home)),
+                      (_("Configurações…"),
                        later(lambda: self.app.show_settings("look"))),
-                      ("Abrir o log", later(lambda: self.app.activate_action(
-                          "open-log", None))),
+                      (_("Abrir o log"), later(
+                          lambda: self.app.activate_action("open-log",
+                                                           None))),
                       None,
-                      ("Sair da Mexerica", later(self.app.quit))],
+                      (_("Sair da Mexerica"), later(self.app.quit))],
                 on_close=later(self.app.quit))
         except Exception:  # noqa: BLE001 - sem bandeja o resto funciona
             log.exception("ícone da bandeja indisponível")
+
+    def _drop_old_menu_item(self) -> None:
+        """O item "Ações da Mexerica" no menu do Explorer foi substituído
+        pelo Ctrl + botão direito: quem o tinha ligado, perde o item."""
+        try:
+            from . import context
+            if context.registered():
+                context.unregister()
+                log.info("item antigo do menu de contexto removido")
+        except OSError:
+            pass
+
+    # -- roda por clique ----------------------------------------------------
+    def anchor_at(self, point) -> None:
+        """A roda por clique abre em `point` (pixels físicos) ou, sem ele,
+        no ponteiro de agora."""
+        self._anchor = tuple(point) if point else W.pointer()
+
+    def set_right_click(self, enabled: bool) -> None:
+        """Ctrl + clique direito no Explorer abre a roda de ações."""
+        hook = getattr(self, "_rclick", None)
+        if hook is not None:
+            hook.stop()
+            self._rclick = None
+        if not enabled:
+            return
+        self._rclick = W.RightClickHook(self._on_right_click)
+        if not self._rclick.active:
+            log.warning("hook do clique direito indisponível")
+            self._rclick = None
+
+    def _on_right_click(self, root: int, x: int, y: int) -> None:
+        """Thread do hook: rápido. A seleção (COM) vem noutra thread."""
+        def work():
+            from . import shellview
+            paths = shellview.selection_at(root)
+            GLib.idle_add(lambda: (self._right_click_wheel(paths, x, y),
+                                   False)[1])
+        threading.Thread(target=work, daemon=True).start()
+
+    def _right_click_wheel(self, paths, x: int, y: int) -> None:
+        if not paths:
+            self.notify("rclick", _("Nada selecionado"),
+                        _("Selecione os arquivos e use Ctrl + clique direito "
+                          "de novo."))
+            return
+        self.app.request_wheel("actions", paths, at=(x, y))
 
     # -- arraste -------------------------------------------------------------
     def _tick(self):
@@ -148,7 +215,10 @@ class WindowsDesktop:
         return GLib.SOURCE_REMOVE
 
     def _poll(self) -> bool:
-        down = W.primary_button_down()
+        # Ctrl + botão direito ligado: ele substitui o Shift + arrastar (os
+        # dois jeitos de abrir a roda não convivem), e o arraste é ignorado
+        drag_on = not settings.get()["right_click_wheel"]
+        down = drag_on and W.primary_button_down()
         image = down and not self.watch.dragging and bool(W.drag_image())
         mode = D.mode_for(*W.modifiers()) if down else None
         now = time.monotonic() * 1000
@@ -164,11 +234,33 @@ class WindowsDesktop:
         elif act:
             self._anchor = None
             self.app.hide_wheel()
+        ov = self.app.overlay
+        if ov is not None and ov.get_visible() and ov.sticky:
+            # roda do Ctrl + botão direito: Tab troca de roda. Lido do
+            # teclado porque o Windows nem sempre dá o foco à roda (com o
+            # foco, quem trata é o próprio GTK)
+            tab = W.key_down(W.VK_TAB)
+            if tab and not self._tab_down and not ov.is_active():
+                ov.cycle(-1 if W.key_down(W.VK_SHIFT) else 1)
+            self._tab_down = tab
+            return True
+        self._tab_down = False
         return down or bool(self.watch.shown)
 
     # -- roda ----------------------------------------------------------------
     def show_overlay(self, win) -> None:
         self._monitor = W.monitor_at(self._anchor or W.pointer())[0]
+        mode = settings.get()["blur"]
+        self.overlay_backdrop = None
+        if mode == "custom":
+            # a foto vem antes da roda aparecer: ela não entra na imagem
+            try:
+                shot = W.capture(self._monitor)
+                if shot is not None:
+                    self.overlay_backdrop = backdrop.blur(
+                        shot, settings.get()["blur_radius"])
+            except Exception:  # noqa: BLE001 - sem fundo, a roda segue
+                log.exception("captura da tela falhou")
         hwnd = W.hwnd_of(win)
         W.add_ex_style(hwnd, W.WS_EX_TOOLWINDOW, W.WS_EX_APPWINDOW)
         win.present()
@@ -178,8 +270,9 @@ class WindowsDesktop:
         if drag:
             W.place_below(hwnd, drag)    # a miniatura do arraste fica visível
         # sem transparência no Windows, a roda fica sem borrão (seria preto);
-        # o escurecimento que ela mesma desenha continua
-        W.set_glass(hwnd, rounded=False)
+        # o escurecimento que ela mesma desenha continua. Com o desfoque
+        # próprio (ou desligado), o DWM não borra nada.
+        W.set_glass(hwnd, rounded=False, blur=mode == "system")
 
     def wheel_center(self, win, w: float, h: float):
         """Ponteiro em coordenadas da janela: a janela cobre o monitor, então
@@ -282,11 +375,13 @@ class WindowsDesktop:
         settings.update(hotkeys_asked=True)
         if H.conflicting():
             self.app.notify(
-                "hotkeys", "Alt+Shift e Ctrl+Shift trocam o teclado",
-                "São as teclas das rodas de ferramentas e de ações. Desligue "
-                "esses atalhos nas Configurações do Windows e troque o "
-                f"teclado com Win+Espaço ({H.STEPS}).",
-                buttons=[("Abrir Configurações", "app.free-hotkeys", None)],
+                "hotkeys", _("Alt+Shift e Ctrl+Shift trocam o teclado"),
+                _("São as teclas das rodas de ferramentas e de ações. "
+                  "Desligue esses atalhos nas Configurações do Windows e "
+                  "troque o teclado com Win+Espaço ({steps}).").format(
+                    steps=_(H.STEPS)),
+                buttons=[(_("Abrir Configurações"), "app.free-hotkeys",
+                          None)],
                 progress=True)
 
     # -- iniciar com o sistema -------------------------------------------------
@@ -319,11 +414,12 @@ class WindowsDesktop:
             return
         W.allow_foreground()
         if not W.reveal(paths):
-            subprocess.Popen(f'explorer /select,"{paths[0]}"')
+            subprocess.Popen(f'explorer /select,"{W.win_path(paths[0])}"')
 
     def open_uri(self, uri: str) -> None:
         W.allow_foreground()
-        os.startfile(Gio.File.new_for_uri(uri).get_path() or uri)
+        path = Gio.File.new_for_uri(uri).get_path()
+        os.startfile(W.win_path(path) if path else uri)
 
     def open_terminal(self, folder: Path) -> None:
         W.allow_foreground()
@@ -384,6 +480,6 @@ class WindowsDesktop:
             y -= TOAST_GAP
         return GLib.SOURCE_REMOVE
 
-    def status(self) -> str:
-        state = "ativa" if self._polling else "parada"
-        return f"Detecção de arraste do Windows: <b>{state}</b>"
+    def drag_ok(self) -> bool | None:
+        """A detecção de arraste (mouse e teclado) está rodando?"""
+        return bool(getattr(self, "_polling", False))

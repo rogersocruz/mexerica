@@ -31,6 +31,7 @@ const GLib = {
     // configurações do serviço (~/.config/mexerica/settings.json)
     get_user_config_dir: () => '/home/r/.config',
     build_filenamev: parts => parts.join('/'),
+    get_language_names: () => ['pt_BR.UTF-8', 'pt_BR', 'pt', 'C'],
     file_get_contents(file) {
         if (settingsJson === null || file !== '/home/r/.config/mexerica/settings.json')
             throw new Error('sem arquivo');
@@ -292,13 +293,26 @@ const button = statusArea.get('mexerica@rogersocruz.github.io');
 assert.ok(button, 'serviço no ar: ícone na barra');
 assert.equal(button.children[0].gicon.name, 'io.github.rogersocruz.Mexerica');
 assert.deepEqual(button.menu.items.map(i => i.label ?? '—'),
-    ['Configurações…', 'Abrir o log', '—', 'Sair da Mexerica']);
+    ['Abrir a Mexerica', 'Configurações…', 'Abrir o log', '—',
+        'Sair da Mexerica']);
 button.menu.items[0].activate();
+assert.equal(calls.at(-1).action, 'home', 'abre a janela Início');
+button.menu.items[1].activate();
 assert.equal(calls.at(-1).action, 'settings', 'abre as Configurações no serviço');
-button.menu.items[3].activate();
+button.menu.items[4].activate();
 assert.equal(calls.at(-1).action, 'quit');
 watcher.vanished();
 assert.ok(button.destroyed && statusArea.size === 0, 'serviço saiu: ícone some');
+watcher.appeared();
+// menu em inglês quando o idioma escolhido é o inglês
+settingsJson = '{"language": "en"}';
+watcher.vanished();
+watcher.appeared();
+assert.deepEqual(
+    statusArea.get('mexerica@rogersocruz.github.io').menu.items.map(i => i.label ?? '—'),
+    ['Open Mexerica', 'Settings…', 'Open the log', '—', 'Quit Mexerica']);
+settingsJson = null;
+watcher.vanished();
 watcher.appeared();
 
 // ---------- 13. escurecer vem das Configurações ---------------------------
@@ -307,6 +321,18 @@ const ov2 = fakeWindow('mexerica-overlay');
 display.emit('window-created', ov2);
 assert.ok(Math.abs(ov2.actor.eased['@effects.mexerica-blur.brightness'] - 0.6) < 1e-9);
 ov2.emit('unmanaged');
+// intensidade do borrão e borrão desligado
+settingsJson = '{"blur": "custom", "blur_radius": 10}';
+const ov3 = fakeWindow('mexerica-overlay');
+display.emit('window-created', ov3);
+assert.equal(ov3.actor.eased['@effects.mexerica-blur.radius'], 15);
+ov3.emit('unmanaged');
+settingsJson = '{"blur": "off", "blur_radius": 30}';
+const ov4 = fakeWindow('mexerica-overlay');
+display.emit('window-created', ov4);
+assert.equal(ov4.actor.eased['@effects.mexerica-blur.radius'], 0, 'sem borrão');
+ov4.emit('unmanaged');
+settingsJson = '{"dim": 40}';
 
 // ---------- 14. Flutuar é redonda: acima, mas sem vidro retangular --------
 const bubble = fakeWindow('Mexerica — Flutuar · foto.png');

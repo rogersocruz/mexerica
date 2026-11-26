@@ -11,13 +11,15 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Gio, GLib, Gtk  # noqa: E402
 
 from .. import theme as TH  # noqa: E402
 from ..engine import background as B  # noqa: E402
 from ..engine import edits as E  # noqa: E402
 from ..engine.ops import Op  # noqa: E402
-from .base import EditorWindow, Segmented, SliderRow, label  # noqa: E402
+from ..i18n import N_, _  # noqa: E402
+from .base import (ColorButton, EditorWindow, Segmented, SliderRow,  # noqa: E402
+                   label)
 from .common import bg  # noqa: E402
 
 PREVIEW_SIDE = 900
@@ -26,12 +28,6 @@ PREVIEW_SIDE = 900
 def _rgb(h: str):
     h = h.lstrip("#")
     return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
-
-
-def _hex(rgba: Gdk.RGBA) -> str:
-    return "#{:02X}{:02X}{:02X}".format(round(rgba.red * 255),
-                                        round(rgba.green * 255),
-                                        round(rgba.blue * 255))
 
 
 class Swatch(Gtk.Button):
@@ -67,8 +63,8 @@ class Swatch(Gtk.Button):
 
 class AddBgWindow(EditorWindow):
     def __init__(self, app, op: Op, path: Path):
-        super().__init__(app, op, "Add Background", 720, 700,
-                         primary="Save with Background")
+        super().__init__(app, op, "Adicionar fundo", 720, 700,
+                         primary="Salvar com fundo")
         self.path = path
         self.style = B.BgStyle(colors=TH.BG_GRADIENTS[0])
         self.img: cairo.ImageSurface | None = None
@@ -82,11 +78,11 @@ class AddBgWindow(EditorWindow):
         self.preview.set_draw_func(self._draw)
         self.body.append(self.preview)
 
-        self.body.append(label("Background"))
+        self.body.append(label("Fundo"))
         row1 = Gtk.Box(spacing=6)
         for c1, c2 in TH.BG_GRADIENTS:
             row1.append(self._swatch((c1, c2), f"{c1} → {c2}"))
-        pick_img = Gtk.Button(label="Image…", valign=Gtk.Align.CENTER)
+        pick_img = Gtk.Button(label=_("Imagem…"), valign=Gtk.Align.CENTER)
         pick_img.add_css_class("mx-pill")
         pick_img.connect("clicked", lambda *_: self._choose_image())
         row1.append(pick_img)
@@ -94,25 +90,25 @@ class AddBgWindow(EditorWindow):
         row2 = Gtk.Box(spacing=6)
         for c in TH.BG_SOLIDS:
             row2.append(self._swatch((c,), c))
-        self.custom = Gtk.Button(label="Custom", valign=Gtk.Align.CENTER)
+        self.custom = ColorButton(self.style.color, self._custom_color,
+                                  text=N_("Outra cor"))
         self.custom.add_css_class("mx-pill")
-        self.custom.connect("clicked", lambda *_: self._choose_color())
         row2.append(self.custom)
         self.body.append(row2)
 
         lo, hi, dflt = TH.BG_PADDING
-        self.padding = SliderRow("Padding", lo, hi, dflt,
+        self.padding = SliderRow("Margem", lo, hi, dflt,
                                  on_change=lambda v: self._set(padding=v))
         lo, hi, dflt = TH.BG_CORNERS
-        self.corners = SliderRow("Corners", lo, hi, dflt,
+        self.corners = SliderRow("Cantos", lo, hi, dflt,
                                  on_change=lambda v: self._set(corners=v))
         lo, hi, dflt = TH.BG_SHADOW
-        self.shadow = SliderRow("Shadow", lo, hi, dflt,
+        self.shadow = SliderRow("Sombra", lo, hi, dflt,
                                 on_change=lambda v: self._set(shadow=v))
         for s in (self.padding, self.corners, self.shadow):
             self.body.append(s)
         ratio = Gtk.Box(spacing=10)
-        ratio.append(label("Ratio", hexpand=True))
+        ratio.append(label("Proporção", hexpand=True))
         self.ratio = Segmented([r[0] for r in TH.BG_RATIOS],
                                on_change=lambda i: self._set(
                                    ratio=TH.BG_RATIOS[i][1]))
@@ -120,7 +116,7 @@ class AddBgWindow(EditorWindow):
         self.body.append(ratio)
 
         self._select(self.swatches[0])
-        self.say("Loading…")
+        self.say("Carregando…")
 
         def load():
             size = E.image_size(path)
@@ -154,31 +150,23 @@ class AddBgWindow(EditorWindow):
 
     def _loaded(self, res) -> None:
         if isinstance(res, Exception):
-            self.say(f"Could not open the image: {res}", error=True)
+            self.say(_("Não deu para abrir a imagem: {err}").format(err=res),
+                     error=True)
             return
         (w, _h), self.img = res
         self.k = self.img.get_width() / w if w else 1.0
         self.save_btn.set_sensitive(True)
-        self.say("PNG, saved next to the original")
+        self.say("PNG, salvo ao lado do original")
         self.preview.queue_draw()
 
     # --- escolhas externas -------------------------------------------------
-    def _choose_color(self) -> None:
-        dialog = Gtk.ColorDialog(title="Background color", with_alpha=False)
-        initial = Gdk.RGBA()
-        initial.parse(self.style.color)
-
-        def done(dlg, result):
-            try:
-                rgba = dlg.choose_rgba_finish(result)
-            except GLib.Error:
-                return
-            self._set(kind="solid", color=_hex(rgba))
-            self._select(self.custom)
-        dialog.choose_rgba(self, initial, None, done)
+    def _custom_color(self, color: str) -> None:
+        """Outra cor (popover da própria janela, ColorButton)."""
+        self._set(kind="solid", color=color)
+        self._select(self.custom)
 
     def _choose_image(self) -> None:
-        dialog = Gtk.FileDialog(title="Background image")
+        dialog = Gtk.FileDialog(title=_("Imagem de fundo"))
         filt = Gtk.FileFilter()
         filt.add_mime_type("image/*")
         filters = Gio.ListStore.new(Gtk.FileFilter)
@@ -191,14 +179,15 @@ class AddBgWindow(EditorWindow):
             except GLib.Error:
                 return
             path = Path(f.get_path())
-            self.say("Loading background…")
+            self.say("Carregando o fundo…")
             bg(lambda: B.load_png(path, self.tmp, "bg", 1600),
                self.alive(lambda r: self._bg_loaded(path, r)))
         dialog.open(self, None, done)
 
     def _bg_loaded(self, path: Path, res) -> None:
         if isinstance(res, Exception):
-            self.say(f"Could not open the background: {res}", error=True)
+            self.say(_("Não deu para abrir o fundo: {err}").format(err=res),
+                     error=True)
             return
         self.bg_img = res
         self._select(None)

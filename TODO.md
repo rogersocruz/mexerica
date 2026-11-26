@@ -112,4 +112,21 @@ isso.
         alternativa sem roda.
 - [ ] **Empacotamento por plataforma:** Flatpak (GNOME e KDE, mas a
       extensão do Shell fica fora do sandbox), AUR (já há PKGBUILD), .deb
-      e .rpm.
+      e .rpm (RNF-02, Fase 2 do plano).
+- [x] **COSMIC e outros sem a extensão** (`desktop/cosmic.py`): roda por
+      atalho de teclado (`mexerica wheel`) numa camada overlay do
+      gtk4-layer-shell. Falta validar numa sessão COSMIC real.
+- [x] **Windows: menu de contexto e Ctrl + clique direito** abrem a roda
+      de ações (`desktop/context.py`, `RightClickHook`).
+  - [ ] Menu moderno do Windows 11 (sem "Mostrar mais opções"): precisa de
+        um `IExplorerCommand` num DLL nativo com identidade de pacote (Store).
+- [x] **Desfoque próprio no Windows** (`wheel/backdrop.py`): captura +
+      borrão em memória, com intensidade; funciona sem a transparência.
+
+## 9. PDF — feito na 0.2.0
+
+- [x] Organizador de páginas (MERGE… e PAGES): reordenar, girar, apagar,
+      inverter, desfazer. Ordem do merge = ordem da lista do Explorer.
+- [x] SPLIT: página a página, um intervalo, vários, a cada N.
+- [x] UNLOCK: senha e restrições (qpdf).
+- [ ] Validar o arraste entre miniaturas numa sessão real (Windows e GNOME).
