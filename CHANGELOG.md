@@ -7,7 +7,7 @@ CORREÇÃO. Na Microsoft Store a mesma versão ganha um `.0` no fim
 (`0.2.0` → `0.2.0.0`). Como fazer um lançamento:
 [Desenvolvimento](docs/wiki/Desenvolvimento.md#versões).
 
-## [0.2.0] — não lançada
+## [0.2.0] — 2026-11-26
 
 ### Novo
 
